@@ -1,769 +1,1014 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowRight, ArrowLeft, Check, Loader2, ChevronDown, ChevronUp, ExternalLink, AlertTriangle, Copy } from 'lucide-react';
+import { ArrowRight, ArrowLeft, Check, Loader2, ChevronDown, ChevronUp, ExternalLink, AlertTriangle, Copy, Clock, Dumbbell, Moon, Coffee, UtensilsCrossed } from 'lucide-react';
 
 // =====================================================
-// MEALFRAME HANDOFF
-// PLACEHOLDER — set this to MealFrame's real deployed URL when it's live.
-// The "Continue to MealFrame" button appends ?code=<MM1 code>, mirroring the
-// PhysiquePlan → MacroMetric click-through.
+// OPTIWORKOUT HANDOFF
+// PLACEHOLDER — set this to OptiWorkout's real deployed URL when it's live.
+// The "Continue to OptiWorkout" button appends ?code=<MF1 template ID>,
+// mirroring the PhysiquePlan → MacroMetric → MealFrame click-through chain.
 // =====================================================
-const MEALFRAME_URL = 'https://mealframe.raduantoniu.com';
+const OPTIWORKOUT_URL = 'https://optiworkout.raduantoniu.com';
+const MACROMETRIC_URL = 'https://strategy.raduantoniu.com'; // "I don't have a code" fallback
 
 // =====================================================
-// UNIT CONVERSION HELPERS
+// UNIT / ROUNDING HELPERS  (copied verbatim from MacroMetric)
 // =====================================================
 
-const cmToFtIn = (cm) => {
-  const totalInches = cm / 2.54;
-  const ft = Math.floor(totalInches / 12);
-  const inches = Math.round(totalInches - ft * 12);
-  return { ft, inches };
-};
-
-const ftInToCm = (ft, inches) => (parseFloat(ft) * 12 + parseFloat(inches)) * 2.54;
 const kgToLb = (kg) => kg * 2.20462;
 const lbToKg = (lb) => lb / 2.20462;
-
-// =====================================================
-// ROUNDING HELPERS
-// =====================================================
-
 const roundUpTo50 = (x) => Math.ceil(x / 50) * 50;
+const roundToNearest50 = (x) => Math.round(x / 50) * 50;
 const roundToNearest5 = (x) => Math.round(x / 5) * 5;
+const roundTo5g = (x) => Math.round(x / 5) * 5;
+const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
+
+const minutesToClock = (mins) => {
+  let m = ((mins % 1440) + 1440) % 1440;
+  const h = Math.floor(m / 60);
+  const mm = m % 60;
+  return `${h}:${String(mm).padStart(2, '0')}`; // 24-hour: 7:00, 19:00, 13:30
+};
+// For <input type="time"> round-tripping (24h "HH:MM").
+const minutesToHHMM = (mins) => {
+  let m = ((mins % 1440) + 1440) % 1440;
+  return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+};
+const hhmmToMinutes = (s) => {
+  const [h, m] = (s || '').split(':').map(Number);
+  if (isNaN(h) || isNaN(m)) return null;
+  return h * 60 + m;
+};
 
 // =====================================================
 // ░░░ TUNING SURFACE ░░░
-// Everything a coach would want to retune lives here. The logic below reads
-// these tables and never hardcodes a rate. Edit numbers here, not in functions.
-//
-// All targets are now keyed off STRENGTH DEVELOPMENT (tier + sub-bracket),
-// which PhysiquePlan ships in the SS1 code. The 10-archetype label is purely
-// narrative now — it no longer drives a single number.
+// Everything a coach would retune lives here. The engines read these tables and
+// never hardcode a number. Edit here, not in the functions below.
 // =====================================================
 
-// --- MAINTENANCE: muscle-mass adjustment -------------------------------------
-// Two lifters at the same bodyweight/height/age/activity burn slightly different
-// amounts: the more developed one carries more lean tissue (higher resting burn).
-// Mifflin-St Jeor only sees total bodyweight, so we add this back by tier.
-// Added into the component subtotal, so it flows through the ×1.10 TEF like NEAT.
-const TIER_MAINTENANCE_ADJ = { novice: 0, intermediate: 40, proficient: 80, advanced: 120 }; // kcal/day
+// --- CALORIE VECTORS (% of daily kcal per meal, in order) --------------------
+// Keyed by direction → mealCount → backload/load tier.
+// CUT: dinner-weighted as backload intensifies. BULK: more even, slight PWO tilt.
+const CALORIE_VECTORS = {
+  cut: {
+    2: { light: [50, 50], moderate: [45, 55], heavy: [30, 70] },
+    3: { light: [30, 30, 40], moderate: [25, 30, 45], heavy: [15, 15, 70] },
+  },
+  bulk: {
+    3: { low: [33, 33, 34], mid: [30, 35, 35], high: [30, 35, 35] },
+    4: { low: [25, 25, 25, 25], mid: [25, 25, 25, 25], high: [22, 26, 26, 26] },
+    5: { low: [20, 20, 20, 20, 20], mid: [20, 20, 20, 20, 20], high: [18, 20, 22, 20, 20] },
+  },
+};
 
-// Per-step NET cost above resting. NOT the gross "10k steps ≈ 500 kcal" figure —
-// BMR already pays for resting metabolism during walking time, so we count only
-// the increment over rest (~2.5 METs, not 3.5), shaved slightly for the fact that
-// the flat 20% NEAT below already includes baseline daily walking.
-const STEPS_KCAL_PER_STEP = 0.03;
+// --- PROTEIN DISTRIBUTION WEIGHTS (relative; normalized at runtime) -----------
+// LIGHT/even = spread evenly. As backload intensifies, protein FRONT-loads so the
+// dinner can be lower-protein (eats what's served). A 20g/meal floor is enforced.
+const PROTEIN_WEIGHTS = {
+  cut: {
+    2: { light: [1, 1], moderate: [1.1, 0.95], heavy: [1.6, 0.7] },
+    3: { light: [1, 1, 1], moderate: [1.2, 1.2, 0.9], heavy: [1.5, 1.5, 0.6] },
+  },
+  bulk: {
+    3: { low: [1, 1, 1], mid: [1, 1, 1], high: [1, 1, 1] },
+    4: { low: [1, 1, 1, 1], mid: [1, 1, 1, 1], high: [1, 1, 1, 1] },
+    5: { low: [1, 1, 1, 1, 1], mid: [1, 1, 1, 1, 1], high: [1, 1, 1, 1, 1] },
+  },
+};
 
-const WORKOUT_KCAL = 200; // per resistance-training session
+// --- FAT DISTRIBUTION WEIGHTS -------------------------------------------------
+// CUT: fat rides with density → heavier at dinner on backloaded plans.
+// BULK: even (fat is the easy lever to add calories).
+const FAT_WEIGHTS = {
+  cut: {
+    2: { light: [1, 1], moderate: [0.9, 1.1], heavy: [0.6, 1.6] },
+    3: { light: [1, 1, 1], moderate: [0.9, 0.9, 1.2], heavy: [0.6, 0.6, 1.8] },
+  },
+  bulk: {
+    3: { low: [1, 1, 1], mid: [1, 1, 1], high: [1, 1, 1] },
+    4: { low: [1, 1, 1, 1], mid: [1, 1, 1, 1], high: [1, 1, 1, 1] },
+    5: { low: [1, 1, 1, 1, 1], mid: [1, 1, 1, 1, 1], high: [1, 1, 1, 1, 1] },
+  },
+};
 
-// Per minute of NON-STEP cardio only (cycling, swimming, rowing, elliptical, yoga).
-// Foot-based cardio (running, jogging, treadmill, walking) is intentionally EXCLUDED
-// from this field — it's already captured in the step count, and counting it here too
-// would double-count. 7/min reflects the cycling/swimming/rowing this field now means.
-const CARDIO_KCAL_PER_MIN = 7;
+// --- FIBER DISTRIBUTION WEIGHTS -----------------------------------------------
+// CUT: front-loaded for early-meal satiety; dinner relaxes as backload intensifies.
+// BULK high-load: kept modest (don't over-fill a hardgainer who must eat more).
+const FIBER_WEIGHTS = {
+  cut: {
+    2: { light: [1, 1], moderate: [1.2, 0.85], heavy: [1.5, 0.6] },
+    3: { light: [1, 1, 1], moderate: [1.2, 1.2, 0.7], heavy: [1.4, 1.4, 0.5] },
+  },
+  bulk: {
+    3: { low: [1, 1, 1], mid: [1, 1, 1], high: [0.9, 1, 0.9] },
+    4: { low: [1, 1, 1, 1], mid: [1, 1, 1, 1], high: [0.9, 1, 1, 0.9] },
+    5: { low: [1, 1, 1, 1, 1], mid: [1, 1, 1, 1, 1], high: [0.8, 1, 1, 1, 0.8] },
+  },
+};
 
-// --- CUTTING: loss rate ------------------------------------------------------
-// PRIMARY driver is heightDiff (= height_cm − weight_kg), our fat proxy:
-//   lower heightDiff = heavier-for-height = more fat to lose = faster safe cut.
-const CUT_RATE_BY_HEIGHTDIFF = [
-  { maxDiff: 70,       rate: 0.010, cap: 800 }, // very high body fat for height
-  { maxDiff: 80,       rate: 0.009, cap: 700 },
-  { maxDiff: 90,       rate: 0.007, cap: 600 },
-  { maxDiff: 100,      rate: 0.006, cap: 600 },
-  { maxDiff: Infinity, rate: 0.005, cap: 500 }, // already fairly lean
+// --- DENSITY BANDS (kcal/g) ---------------------------------------------------
+// A target window per meal. CUT keeps early meals low (volume satiation) and lets
+// the dinner relax as backload climbs. BULK inverts on high load.
+// Index semantics: [firstMeal, midMeals…, lastMeal]. Helper picks by position.
+const DENSITY_BANDS = {
+  cut: {
+    early: [0.6, 1.1],
+    mid: [0.9, 1.4],
+    dinner: { light: [1.1, 1.6], moderate: [1.3, 1.9], heavy: [1.5, 2.6] },
+  },
+  bulk: {
+    // low load behaves cut-like; high load opens the ceiling (eat enough)
+    early: { low: [0.9, 1.5], mid: [1.2, 1.9], high: [1.6, 2.6] },
+    mid: { low: [1.0, 1.6], mid: [1.3, 2.0], high: [1.8, 2.8] },
+    dinner: { low: [1.2, 1.8], mid: [1.5, 2.2], high: [2.0, 3.2] },
+  },
+};
+
+// Leanness hook (CUT only, dormant-ish): tighten density ceilings as the lifter
+// gets leaner. heightDiff = height_cm − weight_kg; higher = leaner-for-height.
+// Multiplier applied to the band ceiling. Set all to 1.0 to disable.
+const LEANNESS_DENSITY_MULT = [
+  { maxHeightDiff: 80, mult: 1.0 },   // higher body fat — no tightening
+  { maxHeightDiff: 95, mult: 0.95 },
+  { maxHeightDiff: Infinity, mult: 0.88 }, // lean — push toward lower density
 ];
-// SECONDARY driver: muscle-preservation multiplier on that rate. At equal
-// heightDiff a more developed lifter is actually leaner and has more hard-won
-// muscle to protect -> cut a touch slower. index = subBracket (0 low,1 mid,2 high).
-// Set every cell to 1.00 to make cutting purely heightDiff-driven.
-const CUT_PRESERVATION = {
-  novice:       [1.00, 1.00, 0.98],
-  intermediate: [0.98, 0.96, 0.94],
-  proficient:   [0.94, 0.92, 0.90],
-  advanced:     [0.90, 0.88, 0.86],
-};
 
-// --- BULKING: gain rate + surplus -------------------------------------------
-// Clean tier base × sub-bracket modifier. Monotonic by construction: a low-in-tier
-// lifter has more growth headroom, so he bulks faster than a high-in-tier lifter.
-const BULK_GAIN_RATE = { novice: 2.0, intermediate: 1.3, proficient: 0.8, advanced: 0.5 }; // %bw/month
-const BULK_SUBBRACKET_MULT = [1.15, 1.00, 0.85]; // [low, mid, high]
-// Surplus % of maintenance uses the same shape (gentler modifier), then capped.
-const BULK_SURPLUS_PCT = { novice: 0.15, intermediate: 0.11, proficient: 0.08, advanced: 0.06 };
-const BULK_SURPLUS_SUBBRACKET_MULT = [1.10, 1.00, 0.90]; // [low, mid, high]
-const BULK_SURPLUS_CAP = 500; // kcal/day
+// --- SHAKE SLOT ---------------------------------------------------------------
+const SHAKE_KCAL_PCT = 0.06;   // ~5–6% of daily calories
+const SHAKE_PROTEIN_G = 25;    // ~25g protein, ~110 kcal drink
+const BULK_AM_PROTEIN_FLOOR = 25; // bulk "light anchor" mandatory morning protein
 
-// --- PROTEIN ----------------------------------------------------------------
-// Prescribed by HEIGHT × coefficient (not bodyweight), keyed by tier + direction,
-// with a small within-tier nudge. More developed = more lean mass = higher coeff.
-const PROTEIN_COEFF = {
-  cut:  { novice: 0.85, intermediate: 0.88, proficient: 0.92, advanced: 1.00 },
-  bulk: { novice: 0.75, intermediate: 0.80, proficient: 0.85, advanced: 0.90 },
-};
-const PROTEIN_SUBBRACKET_NUDGE = [-0.02, 0.00, 0.02]; // [low, mid, high]
+// --- BULK LOAD THRESHOLDS (surplus kcal per kg bodyweight) --------------------
+// It's not the total target, it's how big the surplus is FOR THE LIFTER'S SIZE.
+const BULK_LOAD_KCAL_PER_KG = [
+  { maxLoad: 3.5, tier: 'low' },     // small surplus / big lifter → cut-like
+  { maxLoad: 6.0, tier: 'mid' },
+  { maxLoad: Infinity, tier: 'high' }, // big surplus / small lifter → invert cut
+];
 
-// --- FAT --------------------------------------------------------------------
-const FAT_PCT = { cut: 0.35, bulk: 0.30 };
+// --- DEFAULT CLOCK TIMES (minutes from midnight) when not personalized --------
+const DEFAULT_WAKE = 7 * 60;       // 7:00 AM
+const DEFAULT_SLEEP = 23 * 60;     // 11:00 PM
+const DEFAULT_TRAIN = 18 * 60;     // 6:00 PM
 
-// --- FIBER ------------------------------------------------------------------
-// A MINIMUM target, not a macro that's part of the calorie split (it lives
-// inside carbs). 14 g per 1,000 kcal is the standard recommendation; it earns
-// its place here because fiber drives satiety and prevents the constipation
-// common on a high-protein deficit.
+// --- MEAL TIMING (all relational — last meal floats off SLEEP, not a clock) ---
+// Leave a digestion gap before bed (soft default, can be broken). Late sleepers
+// eat later, early sleepers earlier — placement floats with their actual bedtime.
+const LAST_MEAL_BEFORE_SLEEP = 150;  // target 2.5h between last meal and sleep
+const MIN_LAST_MEAL_GAP = 120;       // the "does it fit before bed?" threshold (2h)
+
+// Meal spacing. Meals are spaced FORWARD from the first meal by a fixed gap (not
+// stretched evenly across the day), so two meals never land too close together.
+const FIRST_MEAL_AFTER_WAKE_FASTED = 240; // fasted: first meal ~4h after waking (3–5h range)
+const FIRST_MEAL_AFTER_WAKE = 60;          // non-fasted: first meal ~1h after waking
+const INTER_MEAL_GAP = 210;                // ≥3.5h between consecutive meals (3–4h range)
+const MIN_INTER_MEAL_GAP = 150;            // hard floor (2.5h) used only if the day is genuinely tight
+
+// A workout is a ~1h session + commute + cooking, so a realistic post-workout
+// MEAL lands well after the session starts — not 30 min later.
+const POST_WORKOUT_MEAL_DELAY = 150; // big post-workout meal ≈ 2.5h after train start
+const POST_WORKOUT_LIGHT_DELAY = 90; // a light snack/shake ≈ 1.5h after train start
+const PRE_WORKOUT_MEAL_GAP = 120;    // when the big meal moves BEFORE training, ~2h prior (digest before lifting)
+
+// Classify the workout slot. Most people train morning (pre-work) or evening
+// (post-work); only evening training triggers the pre/post-meal-size logic.
+const MORNING_TRAIN_CUTOFF = 11 * 60; // ≤ 11:00 → morning training (the simple case)
+const EVENING_TRAIN_CUTOFF = 16 * 60; // ≥ 16:00 → evening training (special logic)
+
+// DORMANT HOOK (not currently applied). An alternative to "keep the largest meal
+// before the gym" for late-evening trainers is to FLATTEN the day instead. We
+// chose to keep the last meal largest (coach preference). To switch a late-evening
+// trainer to a flattened day, apply this map to the tier in the loading effect.
+const FLATTEN_TIER_MAP = { heavy: 'light', moderate: 'light', light: 'light' };
+
 const FIBER_PER_1000KCAL = 14;
+const calcFiber = (kcal) => roundToNearest5((kcal / 1000) * FIBER_PER_1000KCAL);
 
 // =====================================================
-// SHREDSMART CODE — decoder (schema v1)
-// Contract: SS1-<base64url(payload)>-<checksum>
-// payload = 12 fields joined by '|'. MUST mirror PhysiquePlan's encoder exactly.
+// MM1 DECODER  (MUST mirror MacroMetric's buildMacroMetricCode EXACTLY)
+// 13 fields: units|dir|kcal|P|F|C|fiber|tier|sub|weight|height|maint|genDate
 // =====================================================
 
-const SCHEMA_PREFIX = 'SS1';
+const MM_SCHEMA_PREFIX = 'MM1';
 const TIER_NAME = ['novice', 'intermediate', 'proficient', 'advanced'];
 
-// Same 2-char base36 hash PhysiquePlan uses. We recompute and compare so a
-// mistyped/corrupted code fails loudly instead of decoding into a wrong plan.
 function checksum2(str) {
   let h = 0;
-  for (let i = 0; i < str.length; i++) {
-    h = (h * 31 + str.charCodeAt(i)) % 1296; // 36^2
-  }
+  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) % 1296;
   return h.toString(36).padStart(2, '0');
 }
-
 function base64urlDecode(s) {
   let t = s.replace(/-/g, '+').replace(/_/g, '/');
   while (t.length % 4) t += '=';
   return atob(t);
 }
-
-// Returns { ok:true, data } or { ok:false, error } where error is one of:
-// 'empty' | 'format' | 'version' | 'corrupt' | 'checksum' | 'fields'
-function decodeShredSmartCode(raw) {
-  if (!raw || !raw.trim()) return { ok: false, error: 'empty' };
-  const parts = raw.trim().split('-');
-  if (parts.length !== 3) return { ok: false, error: 'format' };
-  const [prefix, body, checksum] = parts;
-
-  if (prefix !== SCHEMA_PREFIX) {
-    // A recognizable-but-newer schema (SS2, SS3…) → ask for a re-run, don't misdecode.
-    if (/^SS\d+$/i.test(prefix)) return { ok: false, error: 'version' };
-    return { ok: false, error: 'format' };
-  }
-
-  let payload;
-  try {
-    payload = base64urlDecode(body);
-  } catch {
-    return { ok: false, error: 'corrupt' };
-  }
-  if (checksum2(payload) !== checksum) return { ok: false, error: 'checksum' };
-
-  const f = payload.split('|');
-  if (f.length < 12) return { ok: false, error: 'fields' };
-
-  const tierIdx = parseInt(f[4], 10);
-  const data = {
-    units: f[0] === 'i' ? 'imperial' : 'metric', // 1
-    sex: f[1] || 'm',                             // 2
-    height: parseInt(f[2], 10),                   // 3  cm
-    weight: parseFloat(f[3]),                     // 4  kg
-    tier: TIER_NAME[tierIdx] ?? 'novice',         // 5
-    tierIdx,
-    score: parseFloat(f[5]),                      // 6
-    subBracket: parseInt(f[6], 10),               // 7  0/1/2
-    archetypeId: parseInt(f[7], 10),              // 8  narrative only
-    direction: f[8] === 'c' ? 'cut' : 'bulk',     // 9  recommendation
-    goalLow: parseFloat(f[9]),                    // 10 kg
-    goalHigh: parseFloat(f[10]),                  // 11 kg
-    genDate: f[11],                               // 12 YYYYMMDD
-  };
-
-  if (isNaN(data.height) || isNaN(data.weight) || isNaN(data.subBracket)) {
-    return { ok: false, error: 'fields' };
-  }
-  return { ok: true, data };
-}
-
-// Age of the plan in weeks, for the staleness nudge. null if undateable.
-function genDateAgeWeeks(genDate) {
-  if (!genDate || genDate.length !== 8) return null;
-  const y = +genDate.slice(0, 4);
-  const m = +genDate.slice(4, 6) - 1;
-  const d = +genDate.slice(6, 8);
-  const then = new Date(y, m, d);
-  if (isNaN(then.getTime())) return null;
-  return (Date.now() - then.getTime()) / (1000 * 60 * 60 * 24 * 7);
-}
-
-// =====================================================
-// MACROMETRIC CODE — encoder (schema MM1)
-// The handoff to MealFrame™, mirroring the SS1 design. Carries MacroMetric's
-// COMPUTED outputs (target/macros/fiber/maintenance, which don't exist in SS1)
-// PLUS a pass-through of the body/strength fields SS1 already supplied
-// (tier/subBracket/weight/height) so MealFrame never has to re-decode SS1.
-// Same base64url + 2-char checksum so a corrupted code fails loudly.
-//
-// Contract (13 fields, '|'-joined — MealFrame's decoder MUST mirror EXACTLY):
-//   1  units        'i' | 'm'              (display only)
-//   2  direction    'c' (cut) | 'b' (bulk)
-//   3  targetKcal   int
-//   4  protein      int  g
-//   5  fat          int  g
-//   6  carbs        int  g
-//   7  fiber        int  g    (minimum target)
-//   8  tier         int  0-3  (0 novice … 3 advanced — matches SS1 tierIdx)
-//   9  subBracket   int  0|1|2 (low/mid/high — matches SS1 subBracket)
-//   10 weight       kg, ≤1 decimal (pass-through from SS1 / latest check-in)
-//   11 height       int cm        (pass-through from SS1)
-//   12 maintenance  int kcal      (computed here from age/activity)
-//   13 genDate      YYYYMMDD      (staleness)
-// Wrapped: MM1-<base64url(payload)>-<checksum>
-//
-// The SAME builder is used by both the setup-flow results screen AND the
-// check-in result screen. The check-in constructs an object with these exact
-// field names (updated target/macros + latest weight, pass-through strength
-// fields from the ingested MM1 code) and hands it here. One encoder, one
-// contract, no drift.
-// =====================================================
-
-const MM_SCHEMA_PREFIX = 'MM1';
-
 function base64urlEncode(str) {
   return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
-
 function genDateStr(d = new Date()) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}${m}${day}`;
 }
-
-function buildMacroMetricCode(result, units) {
-  const tierIdx = TIER_NAME.indexOf(result.tier); // word → index; mirrors SS1
-  const fields = [
-    units === 'imperial' ? 'i' : 'm',             // 1  units (display)
-    result.direction === 'cut' ? 'c' : 'b',       // 2  direction
-    String(Math.round(result.target)),            // 3  target kcal
-    String(Math.round(result.protein)),           // 4  protein g
-    String(Math.round(result.fat)),               // 5  fat g
-    String(Math.round(result.carbs)),             // 6  carbs g
-    String(Math.round(result.fiber)),             // 7  fiber g
-    String(tierIdx >= 0 ? tierIdx : 0),           // 8  tier index 0-3
-    String(result.subBracket),                    // 9  subBracket 0/1/2
-    String(Math.round(result.weight * 10) / 10),  // 10 weight kg (≤1 dp)
-    String(Math.round(result.height)),            // 11 height cm
-    String(Math.round(result.maintenance)),       // 12 maintenance kcal
-    genDateStr(),                                 // 13 genDate
-  ];
-  const payload = fields.join('|');
-  return `${MM_SCHEMA_PREFIX}-${base64urlEncode(payload)}-${checksum2(payload)}`;
+function genDateAgeWeeks(genDate) {
+  if (!genDate || genDate.length !== 8) return null;
+  const then = new Date(+genDate.slice(0, 4), +genDate.slice(4, 6) - 1, +genDate.slice(6, 8));
+  if (isNaN(then.getTime())) return null;
+  return (Date.now() - then.getTime()) / (1000 * 60 * 60 * 24 * 7);
 }
-
-// =====================================================
-// MACROMETRIC CODE — decoder (schema MM1)
-// Mirror of buildMacroMetricCode. Used by the CHECK-IN flow so a returning user
-// pastes the MM1 code from their plan (or their last check-in) and we recover
-// tier/subBracket/height/maintenance — the fields the check-in form never
-// collects but a complete output code needs. Symmetric with the SS1 decoder.
-//
-// Returns { ok:true, data } or { ok:false, error } where error is one of:
-// 'empty' | 'format' | 'version' | 'wrongcode' | 'corrupt' | 'checksum' | 'fields'
-// =====================================================
 
 function decodeMacroMetricCode(raw) {
   if (!raw || !raw.trim()) return { ok: false, error: 'empty' };
   const parts = raw.trim().split('-');
   if (parts.length !== 3) return { ok: false, error: 'format' };
   const [prefix, body, checksum] = parts;
-
   if (prefix !== MM_SCHEMA_PREFIX) {
-    // Newer MacroMetric schema (MM2…) → ask for a re-run.
     if (/^MM\d+$/i.test(prefix)) return { ok: false, error: 'version' };
-    // They pasted a PhysiquePlan code by mistake.
     if (/^SS\d+$/i.test(prefix)) return { ok: false, error: 'wrongcode' };
     return { ok: false, error: 'format' };
   }
-
   let payload;
-  try {
-    payload = base64urlDecode(body);
-  } catch {
-    return { ok: false, error: 'corrupt' };
-  }
+  try { payload = base64urlDecode(body); } catch { return { ok: false, error: 'corrupt' }; }
   if (checksum2(payload) !== checksum) return { ok: false, error: 'checksum' };
-
   const f = payload.split('|');
-  // <13 catches the legacy 7-field MM1 too → handled as 'fields' (re-run).
   if (f.length < 13) return { ok: false, error: 'fields' };
-
   const tierIdx = parseInt(f[7], 10);
   const data = {
-    units: f[0] === 'i' ? 'imperial' : 'metric', // 1
-    direction: f[1] === 'c' ? 'cut' : 'bulk',     // 2
-    target: parseInt(f[2], 10),                   // 3
-    protein: parseInt(f[3], 10),                  // 4
-    fat: parseInt(f[4], 10),                      // 5
-    carbs: parseInt(f[5], 10),                    // 6
-    fiber: parseInt(f[6], 10),                    // 7
-    tier: TIER_NAME[tierIdx] ?? 'novice',         // 8
+    units: f[0] === 'i' ? 'imperial' : 'metric',
+    direction: f[1] === 'c' ? 'cut' : 'bulk',
+    target: parseInt(f[2], 10),
+    protein: parseInt(f[3], 10),
+    fat: parseInt(f[4], 10),
+    carbs: parseInt(f[5], 10),
+    fiber: parseInt(f[6], 10),
+    tier: TIER_NAME[tierIdx] ?? 'novice',
     tierIdx,
-    subBracket: parseInt(f[8], 10),               // 9
-    weight: parseFloat(f[9]),                     // 10 kg
-    height: parseInt(f[10], 10),                  // 11 cm
-    maintenance: parseInt(f[11], 10),             // 12 kcal
-    genDate: f[12],                               // 13
+    subBracket: parseInt(f[8], 10),
+    weight: parseFloat(f[9]),
+    height: parseInt(f[10], 10),
+    maintenance: parseInt(f[11], 10),
+    genDate: f[12],
   };
-
-  if (
-    isNaN(data.target) || isNaN(data.protein) ||
-    isNaN(data.weight) || isNaN(data.height) || isNaN(data.subBracket)
-  ) {
+  if (isNaN(data.target) || isNaN(data.protein) || isNaN(data.weight) || isNaN(data.height) || isNaN(data.subBracket)) {
     return { ok: false, error: 'fields' };
   }
   return { ok: true, data };
 }
 
+const subBracketTierLabel = (tier, sub) => {
+  const t = { novice: 'Novice', intermediate: 'Intermediate', proficient: 'Proficient', advanced: 'Advanced' }[tier] || 'Novice';
+  const w = { 0: 'Low', 1: '', 2: 'High' }[sub];
+  return w ? `${w}-${t}` : t;
+};
+
 // =====================================================
-// CLASSIFICATION LABELS (narrative only — no math reads these)
+// QUESTIONNAIRE CONFIG (data-driven; engines read the answer keys)
 // =====================================================
 
-// index = archetype id carried in field 8. Narrative label for display.
-const ARCHETYPE_NAMES = [
-  'Skinny-Fat (Higher Body Fat)',   // 0
-  'Skinny-Fat (Lower Body Fat)',    // 1
-  'Hard Gainer / Skinny',           // 2
-  'Decent Muscle, Higher Body Fat', // 3
-  'Intermediate, Mid-Range',        // 4
-  'Lean Intermediate',              // 5
-  'Strong but Higher Body Fat',     // 6
-  'Almost There',                   // 7
-  'Lean & Muscular',                // 8
-  'Advanced Lifter',                // 9
+const CUT_QUESTIONS = [
+  { id: 'mealCount', q: 'Left to your own devices, how many meals do you naturally eat per day?',
+    options: [['one','One'],['two','Two'],['three','Three'],['four','Four'],['five','Five']] },
+  { id: 'shape', q: 'How would you describe your eating across the day?',
+    options: [
+      ['big_dinner','Light morning, light lunch, big dinner'],
+      ['skip_breakfast','Skip breakfast, normal lunch & dinner'],
+      ['even','Even meals throughout the day'],
+      ['big_breakfast','Big breakfast, lighter later'],
+      ['grazing','Grazing / snacking all day'],
+    ] },
+  { id: 'morningHunger', q: 'Can you comfortably skip breakfast (water + coffee) without struggling?',
+    options: [['easy','Yes, easily'],['ok','I can manage it'],['hard','No, I get very hungry in the morning']] },
+  { id: 'eveningOvereat', q: 'Do you tend to eat more in the evenings?',
+    options: [
+      ['no','No'],
+      ['hungry','Yes — I\'m genuinely hungry at night'],
+      ['onlytime','Yes — it\'s the only time I have to eat'],
+      ['habit','Yes — to decompress / boredom / habit'],
+    ] },
+  { id: 'daytimeControl', q: 'How do you handle food during the day?',
+    options: [
+      ['cook','I cook or bring my own meals'],
+      ['eatout','I eat out / takeout most days'],
+      ['none','No real daytime meals — I skip or grab snacks'],
+      ['wfh','Work from home, eat normally'],
+    ] },
+  { id: 'dinnerControl', q: 'What does dinner usually look like?',
+    options: [
+      ['control','I cook / control it (alone or with partner)'],
+      ['family','Family or partner cooks, we eat together'],
+      ['social','Frequent social or restaurant dinners'],
+      ['varies','It varies a lot week to week'],
+    ] },
+  { id: 'schedule', q: 'How predictable is your weekly schedule?',
+    options: [
+      ['consistent','Consistent — most days look similar'],
+      ['travel','I travel often for work'],
+      ['shifts','I work shifts'],
+      ['nights','I work night shifts'],
+      ['erratic','Most days look very different'],
+    ] },
+  { id: 'workout', q: 'When do you usually train?',
+    options: [
+      ['before_first','Before my first meal (fasted or pre-shake)'],
+      ['midday','Midday / afternoon, between meals'],
+      ['evening','Evening, near my last meal'],
+      ['none','I don\'t train / rarely'],
+      ['varies','It varies'],
+    ] },
+  { id: 'hungryPostWorkout', q: 'Do you get really hungry right after training?',
+    options: [
+      ['yes','Yes — I\'m ravenous after the gym'],
+      ['no','Not especially'],
+    ] },
+  { id: 'snack', q: 'Do you snack between meals?',
+    options: [
+      ['no','No'],
+      ['fruit','Yes — fruit'],
+      ['sweet','Yes — sweets (chocolate, ice cream, etc.)'],
+      ['small','Yes — small meals'],
+    ] },
+  { id: 'alcohol', q: 'How often do you drink alcohol?',
+    options: [
+      ['none','I don\'t drink'],
+      ['rare','Rarely — events only (1–2/week)'],
+      ['moderate','Moderate — mostly weekends (3–6/week)'],
+      ['daily','Daily (1–2+/day)'],
+    ] },
+  { id: 'pastFail', q: 'When past diets failed, what was the main reason?',
+    options: [
+      ['none','I haven\'t really dieted before'],
+      ['evenings','I overate in the evenings'],
+      ['restrictive','It felt too restrictive / depriving'],
+      ['notime','No time / too inconvenient'],
+      ['social','Social events derailed me'],
+      ['hunger','Constant hunger'],
+      ['boredom','Boredom of eating the same things'],
+    ] },
+  { id: 'restriction', q: 'Any dietary restrictions? (choose all that apply)', multi: true,
+    options: [
+      ['none','No restrictions'],
+      ['nomeat','I don\'t eat meat'],
+      ['vegetarian','Lacto-ovo vegetarian'],
+      ['vegan','Vegan'],
+      ['pescatarian','Pescatarian'],
+      ['nopork','No pork'],
+      ['nodairy','No dairy'],
+      ['allergy','Nut / gluten allergy'],
+    ] },
 ];
 
-const SUBBRACKET_WORD = { 0: 'Low', 1: '', 2: 'High' };
-
-// "High-Intermediate", "Novice", etc. Mirrors PhysiquePlan's diagnosis label.
-function subBracketTierLabel(tier, subBracket) {
-  const tierWord = {
-    novice: 'Novice',
-    intermediate: 'Intermediate',
-    proficient: 'Proficient',
-    advanced: 'Advanced',
-  }[tier] || 'Novice';
-  const w = SUBBRACKET_WORD[subBracket];
-  return w ? `${w}-${tierWord}` : tierWord;
-}
-
-// =====================================================
-// MAINTENANCE CALCULATION
-// Mifflin-St Jeor (male) + factorial components × 1.10 TEF, + tier muscle adj.
-// =====================================================
-
-function calculateMaintenance({ weight, height, age, workouts, cardio, steps, job, tier }) {
-  const bmr = 10 * weight + 6.25 * height - 5 * age + 5;
-  const neat = bmr * 0.20;
-  const workoutsKcal = (workouts * WORKOUT_KCAL) / 7;
-  const cardioKcal = (cardio * CARDIO_KCAL_PER_MIN) / 7;
-  const stepsKcal = steps * STEPS_KCAL_PER_STEP;
-  const jobKcal = { desk: 0, feet: 100, physical: 200 }[job];
-  const muscleAdj = TIER_MAINTENANCE_ADJ[tier] ?? 0;
-  const subtotal = bmr + neat + workoutsKcal + cardioKcal + stepsKcal + jobKcal + muscleAdj;
-  const tdee = subtotal * 1.10;
-  return { bmr, neat, workoutsKcal, cardioKcal, stepsKcal, jobKcal, muscleAdj, subtotal, tdee };
-}
-
-// =====================================================
-// DEFICIT CALCULATION (cutting) — heightDiff × muscle preservation
-// =====================================================
-
-function getCuttingRate(tier, subBracket, heightDiff) {
-  const band = CUT_RATE_BY_HEIGHTDIFF.find((b) => heightDiff <= b.maxDiff) || CUT_RATE_BY_HEIGHTDIFF[CUT_RATE_BY_HEIGHTDIFF.length - 1];
-  const presRow = CUT_PRESERVATION[tier] || [1, 1, 1];
-  const preservation = presRow[subBracket] ?? 1;
-  return { rate: band.rate * preservation, cap: band.cap, baseRate: band.rate, preservation };
-}
-
-function calculateCuttingTarget({ maintenance, weight, height, tier, subBracket }) {
-  const heightDiff = height - weight;
-  const { rate, cap } = getCuttingRate(tier, subBracket, heightDiff);
-  const rateBasedDeficit = (weight * rate * 7700) / 7;
-  const dailyDeficit = Math.min(rateBasedDeficit, cap);
-  let target = roundUpTo50(maintenance - dailyDeficit);
-
-  // Minimum target floor (sanity + hormones)
-  const floor = height > 175 ? 2000 : 1800;
-  let floorApplied = false;
-  if (target < floor) {
-    target = floor;
-    floorApplied = true;
-  }
-
-  const targetWeeklyLoss = weight * rate;
-
-  return {
-    target,
-    weeklyRate: rate,
-    cap,
-    rateBasedDeficit,
-    appliedDeficit: dailyDeficit,
-    targetWeeklyLoss,
-    floor,
-    floorApplied,
-  };
-}
+const BULK_QUESTIONS = [
+  { id: 'gainExperience', q: 'When you\'ve tried to gain weight before, what happens?',
+    options: [
+      ['easy','I gain weight easily'],
+      ['struggle','It\'s a struggle to eat enough to grow'],
+      ['fatfast','I gain, but I get fat fast'],
+      ['never','I\'ve never really tried to bulk'],
+    ] },
+  { id: 'appetite', q: 'How is your appetite, day to day?',
+    options: [
+      ['low','Low — I forget to eat / fill up fast'],
+      ['normal','Normal'],
+      ['high','High — I\'m hungry often'],
+    ] },
+  { id: 'shape', q: 'How do you naturally eat in the morning?',
+    options: [
+      ['big_breakfast','Big breakfast — I\'m hungry in the AM'],
+      ['light','Something light'],
+      ['skip','I\'d rather skip / not eat much early'],
+    ] },
+  { id: 'mealCapacity', q: 'How many real meals can you realistically fit in a day?',
+    options: [['three','About 3'],['four','Up to 4'],['five','4–5, no problem']] },
+  { id: 'workout', q: 'When do you usually train?',
+    options: [
+      ['before_first','Before my first meal'],
+      ['midday','Midday / afternoon'],
+      ['evening','Evening'],
+      ['none','I don\'t train / rarely'],
+      ['varies','It varies'],
+    ] },
+  { id: 'hungryPostWorkout', q: 'Do you get really hungry right after training?',
+    options: [
+      ['yes','Yes — I\'m ravenous after the gym'],
+      ['no','Not especially'],
+    ] },
+  { id: 'liquidOk', q: 'Are you open to liquid calories (shakes, milk, juice) to help hit your surplus?',
+    options: [['yes','Yes'],['some','A little'],['no','I\'d rather eat solid food']] },
+  { id: 'schedule', q: 'How predictable is your weekly schedule?',
+    options: [
+      ['consistent','Consistent'],
+      ['travel','I travel often'],
+      ['shifts','I work shifts'],
+      ['nights','Night shifts'],
+      ['erratic','Very variable'],
+    ] },
+  { id: 'restriction', q: 'Any dietary restrictions? (choose all that apply)', multi: true,
+    options: [
+      ['none','No restrictions'],
+      ['nomeat','I don\'t eat meat'],
+      ['vegetarian','Lacto-ovo vegetarian'],
+      ['vegan','Vegan'],
+      ['pescatarian','Pescatarian'],
+      ['nopork','No pork'],
+      ['nodairy','No dairy'],
+      ['allergy','Nut / gluten allergy'],
+    ] },
+];
 
 // =====================================================
-// SURPLUS CALCULATION (bulking) — tier base × sub-bracket modifier
+// CUT SELECTION ENGINE
+// Returns { morningMode, mealCount, backloadTier, flags, notes[] }
+// morningMode: 'fasted' | 'light_anchor' | 'even'
+// backloadTier: 'light' | 'moderate' | 'heavy'
 // =====================================================
 
-// Standalone so the 12-week projection can use it without computing maintenance.
-function getBulkGainRatePct(tier, subBracket) {
-  return (BULK_GAIN_RATE[tier] ?? 0.8) * (BULK_SUBBRACKET_MULT[subBracket] ?? 1); // %bw/month
-}
+function selectCutStructure(a) {
+  const notes = [];
 
-function calculateBulkingTarget({ maintenance, weight, tier, subBracket }) {
-  const basePct = BULK_SURPLUS_PCT[tier] ?? 0.08;
-  const pct = basePct * (BULK_SURPLUS_SUBBRACKET_MULT[subBracket] ?? 1);
-  const rawSurplus = maintenance * pct;
-  const surplus = Math.min(rawSurplus, BULK_SURPLUS_CAP);
-  const target = roundUpTo50(maintenance + surplus);
-
-  // Realistic target gain rate (%bw/month) → absolute monthly gain.
-  const gainRatePct = getBulkGainRatePct(tier, subBracket);
-  const targetMonthlyGain = weight * (gainRatePct / 100);
-
-  return {
-    target,
-    surplusPct: pct,
-    appliedSurplus: surplus,
-    targetMonthlyGain,
-    gainRatePct,
-  };
-}
-
-// =====================================================
-// 12-WEEK LANDING ZONE
-// PhysiquePlan ships only the ULTIMATE goal range. The near-term (this-block)
-// target is MacroMetric's to set, projected from our own gain/loss rates.
-// Depends only on the code (tier/subBracket/weight/height) — no age/activity —
-// so the intro screen and the results screen produce the same number.
-// =====================================================
-
-function compute12WeekRange({ direction, weight, height, tier, subBracket, goalLow, goalHigh }) {
-  if (direction === 'cut') {
-    const { rate } = getCuttingRate(tier, subBracket, height - weight);
-    const weeklyLoss = weight * rate;
-    const optimistic = weight - 12 * weeklyLoss; // 12 clean weeks
-    const realistic = weight - 10 * weeklyLoss;  // with the inevitable stalls
-    let low = Math.max(Math.min(optimistic, realistic), goalLow); // never blow past the ultimate goal
-    let high = Math.max(optimistic, realistic);
-    if (low > high) high = low;
-    return { low, high };
-  }
-  const monthly = weight * (getBulkGainRatePct(tier, subBracket) / 100);
-  const slow = weight + 2.5 * monthly;
-  const fast = weight + 3 * monthly;
-  let low = Math.min(slow, fast);
-  let high = Math.min(Math.max(slow, fast), goalHigh); // don't overshoot the ultimate goal
-  if (high < low) low = high;
-  return { low, high };
-}
-
-// =====================================================
-// PROTEIN CALCULATION — height × tier coeff (+ sub-bracket nudge)
-// =====================================================
-
-function calculateProtein(height, tier, subBracket, direction) {
-  const base = (PROTEIN_COEFF[direction] && PROTEIN_COEFF[direction][tier]) ?? 0.85;
-  const coeff = base + (PROTEIN_SUBBRACKET_NUDGE[subBracket] ?? 0);
-  return roundToNearest5(height * coeff);
-}
-
-// =====================================================
-// FAT & CARBS
-// =====================================================
-
-function calculateFat(calories, direction) {
-  const pct = FAT_PCT[direction] ?? 0.30;
-  return roundToNearest5((calories * pct) / 9);
-}
-
-function calculateCarbs(calories, proteinG, fatG) {
-  const remainingKcal = calories - (proteinG * 4) - (fatG * 9);
-  let carbs = roundToNearest5(remainingKcal / 4);
-  if (carbs < 100) carbs = 100;
-  return carbs;
-}
-
-// Minimum daily fiber (g), scaled to calorie intake, rounded to the nearest 5
-// so it reads as a clean target.
-function calculateFiber(calories) {
-  return roundToNearest5((calories / 1000) * FIBER_PER_1000KCAL);
-}
-
-// =====================================================
-// FULL PRESCRIPTION
-// data = decoded code (tier, subBracket, direction, height, weight, archetypeId,
-//        goalLow, goalHigh) + collected (age, workouts, cardio, steps, job)
-// =====================================================
-
-function buildPrescription(data) {
-  const maint = calculateMaintenance({ ...data });
-  const { direction, tier, subBracket } = data;
-
-  let calorieResult;
-  if (direction === 'cut') {
-    calorieResult = calculateCuttingTarget({
-      maintenance: maint.tdee,
-      weight: data.weight,
-      height: data.height,
-      tier,
-      subBracket,
-    });
+  // --- DECISION 1: morning mode ---
+  let morningMode;
+  if (a.shape === 'even' || a.shape === 'big_breakfast') morningMode = 'even';
+  else if (a.shape === 'big_dinner') morningMode = 'light_anchor';
+  else if (a.shape === 'skip_breakfast') morningMode = 'fasted';
+  else if (a.shape === 'grazing') {
+    morningMode = (a.morningHunger === 'easy') ? 'fasted' : 'light_anchor';
+    notes.push('You described grazing — we\'re replacing that with structured meals, which is what actually holds a deficit.');
   } else {
-    calorieResult = calculateBulkingTarget({
-      maintenance: maint.tdee,
-      weight: data.weight,
-      tier,
-      subBracket,
-    });
+    morningMode = (a.mealCount === 'one' || a.mealCount === 'two') ? 'fasted' : 'even';
+  }
+  // Morning-hunger override: never force a fast on someone who can't tolerate it.
+  if (morningMode === 'fasted' && a.morningHunger === 'hard') {
+    morningMode = 'light_anchor';
+    notes.push('Because mornings are hard for you, we kept a small high-protein first meal instead of a full fast.');
   }
 
-  const protein = calculateProtein(data.height, tier, subBracket, direction);
-  const fat = calculateFat(calorieResult.target, direction);
-  const carbs = calculateCarbs(calorieResult.target, protein, fat);
-  const fiber = calculateFiber(calorieResult.target);
+  // --- DECISION 2: meal count ---
+  let mealCount;
+  if (a.daytimeControl === 'none' || a.daytimeControl === 'eatout') mealCount = 2;
+  else mealCount = 3;
+  if (morningMode === 'even') mealCount = 3; // breakfast+lunch+dinner by definition
+  if ((a.mealCount === 'one') && a.morningHunger === 'easy' && morningMode !== 'even') mealCount = 2;
 
-  return {
-    maintenance: Math.round(maint.tdee),
-    target: calorieResult.target,
-    protein,
-    fat,
-    carbs,
-    fiber,
-    direction,
-    tier,
-    subBracket,
-    archetypeId: data.archetypeId,
-    weight: data.weight,
-    height: data.height,
-    goalLow: data.goalLow,
-    goalHigh: data.goalHigh,
-    weeklyRate: calorieResult.weeklyRate,
-    targetWeeklyLoss: calorieResult.targetWeeklyLoss,
-    targetMonthlyGain: calorieResult.targetMonthlyGain,
-    surplusPct: calorieResult.surplusPct,
-    floorApplied: calorieResult.floorApplied,
+  // --- DECISION 3: backload tier (conflict ladder baked in) ---
+  // Hard constraints first → force banking.
+  let backloadTier;
+  const hardConstraint = (a.dinnerControl === 'family' || a.dinnerControl === 'social' || a.daytimeControl === 'none' || a.daytimeControl === 'eatout');
+  if (a.dinnerControl === 'family' || a.dinnerControl === 'social') {
+    backloadTier = 'heavy';
+    notes.push('Your dinner is largely out of your control, so we bank protein and fiber early and leave a big, flexible calorie budget for the evening meal.');
+  } else if (a.eveningOvereat === 'hungry' || a.eveningOvereat === 'onlytime' || a.daytimeControl === 'none' || a.daytimeControl === 'eatout') {
+    backloadTier = 'moderate';
+  } else {
+    // LIGHT only when EVERY constraint is absent.
+    const lightEligible =
+      a.dinnerControl === 'control' &&
+      (a.daytimeControl === 'cook' || a.daytimeControl === 'wfh') &&
+      a.eveningOvereat === 'no' &&
+      a.snack !== 'small';
+    backloadTier = lightEligible ? 'light' : 'moderate';
+  }
+  // Documented failure mode nudges (rank 2).
+  if (a.pastFail === 'evenings' && backloadTier === 'light') backloadTier = 'moderate';
+
+  // EVEN morning can't be HEAVY (you can't eat breakfast and bank 70% for dinner).
+  if (morningMode === 'even' && backloadTier === 'heavy') {
+    backloadTier = 'moderate';
+    notes.push('Since you eat a real breakfast, we used a moderate backload rather than a heavy one.');
+  }
+
+  // --- FLAGS ---
+  const flags = {
+    shakePre: a.workout === 'before_first',
+    shakePost: false,
+    hungryPostWorkout: a.hungryPostWorkout === 'yes',
+    dessert: a.snack === 'sweet',
+    alcohol: a.alcohol === 'moderate' || a.alcohol === 'daily',
+    alcoholLevel: a.alcohol,
+    restriction: a.restriction || ['none'],
+    irregular: ['travel','shifts','nights','erratic'].includes(a.schedule),
+    workout: a.workout,
+    pastFail: a.pastFail,
   };
+  // Light-anchor implies an early small/liquid feeding; honor a no-time eater too.
+  if (a.daytimeControl === 'none' && morningMode !== 'even') {
+    flags.shakeAnchor = true;
+    notes.push('Since you have no real daytime eating window, your first feeding is a quick protein shake or a small high-protein item.');
+  }
+
+  return { morningMode, mealCount, backloadTier, flags, notes };
 }
 
 // =====================================================
-// CHECK-IN → MM1 CODE
-// A check-in can produce a COMPLETE MM1 code only when it was started from an
-// MM1 code (so tier/subBracket/height/maintenance are known). This builds the
-// updated plan object and hands it to the one shared encoder.
-//   - target/protein come from the check-in result (newTarget/newProtein)
-//   - fat/carbs/fiber are recomputed deterministically from the new target,
-//     exactly the way MacroMetric built them originally (so a no-change result
-//     reproduces the original macros, and a change reflects the new target)
-//   - weight is the user's LATEST measured weight from this check-in
-//   - tier/subBracket/height/maintenance pass through from the ingested code
-//     (maintenance is carried forward unchanged — the check-in has no age/
-//     activity to recompute it, and the check-in math never uses it; the
-//     freshly-adjusted TARGET is what matters)
-// Returns null if there's no ingested plan (manual-entry check-in) — we can't
-// fabricate strength data.
+// BULK SELECTION ENGINE
+// Master dial = surplus PER KG (load) combined with appetite/resistance.
+// Returns { morningMode, mealCount, loadTier, flags, notes[] }
+// loadTier: 'low' | 'mid' | 'high'
 // =====================================================
 
-function buildCheckInCode(result, direction, ingestedPlan, units) {
-  if (!ingestedPlan) return null;
-  const target = result.newTarget;
-  const protein = result.newProtein;
-  const fat = calculateFat(target, direction);
-  const carbs = calculateCarbs(target, protein, fat);
-  const fiber = calculateFiber(target);
-  const plan = {
-    direction,
-    target,
-    protein,
-    fat,
-    carbs,
-    fiber,
-    tier: ingestedPlan.tier,
-    subBracket: ingestedPlan.subBracket,
-    weight: result.currentWeight ?? ingestedPlan.weight, // latest measured weight
-    height: ingestedPlan.height,
-    maintenance: ingestedPlan.maintenance,
+function selectBulkStructure(a, code) {
+  const notes = [];
+  const surplus = Math.max(0, code.target - code.maintenance);
+  const loadPerKg = surplus / Math.max(1, code.weight);
+  const band = BULK_LOAD_KCAL_PER_KG.find((b) => loadPerKg <= b.maxLoad) || BULK_LOAD_KCAL_PER_KG[BULK_LOAD_KCAL_PER_KG.length - 1];
+  let loadTier = band.tier;
+
+  // Resistance / appetite signal shifts the dial.
+  let resist = 0;
+  if (a.gainExperience === 'struggle') resist += 2;
+  if (a.gainExperience === 'fatfast') resist -= 2;   // overeater → keep it lower
+  if (a.gainExperience === 'easy') resist -= 1;
+  if (a.appetite === 'low') resist += 2;
+  if (a.appetite === 'high') resist -= 1;
+
+  const tierOrder = ['low', 'mid', 'high'];
+  let idx = tierOrder.indexOf(loadTier);
+  if (resist >= 2) idx = Math.min(2, idx + 1);
+  if (resist <= -2) idx = Math.max(0, idx - 1);
+  loadTier = tierOrder[idx];
+
+  const overeater = (a.gainExperience === 'fatfast' || a.appetite === 'high');
+  if (overeater) {
+    notes.push('Because you gain fat easily, we keep food volume high and density lower — even on a bulk, you still need a little restraint.');
+  } else if (loadTier === 'high') {
+    notes.push('You\'re resistant to weight gain for your size, so we spread food across more meals and lean on higher-calorie, easier-to-eat foods to hit your surplus.');
+  }
+
+  // --- meal count ---
+  let mealCount;
+  if (loadTier === 'low') mealCount = 3;
+  else if (loadTier === 'mid') mealCount = 4;
+  else mealCount = 5;
+  // Respect what the person can actually fit.
+  const cap = { three: 3, four: 4, five: 5 }[a.mealCapacity] ?? 5;
+  if (mealCount > cap) {
+    mealCount = cap;
+    notes.push(`You can fit about ${cap} meals, so we kept it there and made up the rest with higher-calorie choices${a.liquidOk !== 'no' ? ' and liquid calories' : ''}.`);
+  }
+  if (overeater && mealCount > 4) mealCount = 4;
+
+  // --- morning mode (bulk inverts: EVEN default; pure fast discouraged) ---
+  let morningMode;
+  if (a.shape === 'big_breakfast') morningMode = 'even';
+  else if (a.shape === 'light') morningMode = 'even';
+  else { // 'skip' → still get a mandatory morning protein feeding
+    morningMode = 'light_anchor';
+    notes.push('On a bulk we don\'t fully fast — you\'ll start the day with at least a protein feeding (shake, high-protein yogurt/cheese + fruit) to support muscle growth, even if you don\'t want a full breakfast.');
+  }
+
+  const flags = {
+    shakePre: a.workout === 'before_first',
+    shakePost: false,
+    hungryPostWorkout: a.hungryPostWorkout === 'yes',
+    amProtein: morningMode === 'light_anchor',
+    liquidCalories: loadTier === 'high' && a.liquidOk !== 'no',
+    snacksBetween: loadTier === 'high' || (loadTier === 'mid' && mealCount < 4),
+    higherDensity: loadTier !== 'low' && !overeater,
+    overeater,
+    restriction: a.restriction || ['none'],
+    irregular: ['travel','shifts','nights','erratic'].includes(a.schedule),
+    workout: a.workout,
+    loadPerKg: Math.round(loadPerKg * 10) / 10,
+    surplus: Math.round(surplus),
   };
-  return buildMacroMetricCode(plan, units);
+
+  return { morningMode, mealCount, loadTier, flags, notes };
 }
 
 // =====================================================
-// FORMAT HELPERS
+// PER-MEAL MACRO + DENSITY COMPUTATION
+// Deterministic from (code macros, structure). Distributes P/F/C/fiber across
+// meals by the tuning-surface weights, enforces a 20g protein floor, derives
+// carbs as the remainder, and attaches a target density band per slot.
 // =====================================================
 
-const formatWeight = (kg, units) => {
-  if (units === 'imperial') return `${(kgToLb(kg)).toFixed(1)} lb`;
-  return `${kg.toFixed(1)} kg`;
-};
+function distribute(total, weights) {
+  const sum = weights.reduce((s, w) => s + w, 0) || 1;
+  return weights.map((w) => (total * w) / sum);
+}
 
-const formatWeightRange = (kgLow, kgHigh, units) => {
-  if (units === 'imperial') return `${Math.round(kgToLb(kgLow))}-${Math.round(kgToLb(kgHigh))} lb`;
-  return `${Math.round(kgLow)}-${Math.round(kgHigh)} kg`;
-};
+function pickDensityBand(direction, slotPos, slotCount, tier, heightDiff) {
+  const isFirst = slotPos === 0;
+  const isLast = slotPos === slotCount - 1;
+  let band;
+  if (direction === 'cut') {
+    if (isLast) band = DENSITY_BANDS.cut.dinner[tier];
+    else if (isFirst) band = DENSITY_BANDS.cut.early;
+    else band = DENSITY_BANDS.cut.mid;
+    // leanness tightening on the ceiling
+    const lm = LEANNESS_DENSITY_MULT.find((x) => heightDiff <= x.maxHeightDiff) || { mult: 1 };
+    return [band[0], Math.round(band[1] * lm.mult * 100) / 100];
+  } else {
+    if (isLast) band = DENSITY_BANDS.bulk.dinner[tier];
+    else if (isFirst) band = DENSITY_BANDS.bulk.early[tier];
+    else band = DENSITY_BANDS.bulk.mid[tier];
+    return band;
+  }
+}
+
+function buildMealPlan(code, structure, timing = {}) {
+  const { direction } = code;
+  const tier = direction === 'cut' ? structure.backloadTier : structure.loadTier;
+  const mealCount = structure.mealCount;
+  const heightDiff = code.height - code.weight;
+
+  const calVec = CALORIE_VECTORS[direction][mealCount][tier];
+  const pW = PROTEIN_WEIGHTS[direction][mealCount][tier];
+  const fW = FAT_WEIGHTS[direction][mealCount][tier];
+  const fibW = FIBER_WEIGHTS[direction][mealCount][tier];
+
+  let kcalArr = calVec.map((p) => (code.target * p) / 100);
+  let proteinArr = distribute(code.protein, pW);
+  let fatArr = distribute(code.fat, fW);
+  let fiberArr = distribute(code.fiber, fibW);
+
+  // Enforce 20g protein floor (book: ≥20g/meal), re-balancing the surplus down.
+  const FLOOR = 20;
+  for (let i = 0; i < proteinArr.length; i++) {
+    if (proteinArr[i] < FLOOR && code.protein >= FLOOR * mealCount) proteinArr[i] = FLOOR;
+  }
+
+  const meals = kcalArr.map((kcal, i) => {
+    const p = roundTo5g(proteinArr[i]);
+    const f = roundTo5g(fatArr[i]);
+    const c = Math.max(0, roundTo5g((kcal - p * 4 - f * 9) / 4));
+    const fib = roundTo5g(fiberArr[i]);
+    // Display kcal rounded to a clean 50, derived from the rounded macros so the
+    // number and the grams stay consistent — and it reads as a guideline, not a
+    // to-the-calorie command.
+    const band = pickDensityBand(direction, i, mealCount, tier, heightDiff);
+    return {
+      index: i,
+      kcal: roundToNearest50(p * 4 + f * 9 + c * 4),
+      protein: p, fat: f, carbs: c, fiber: fib,
+      densityBand: band,
+      pctOfDay: calVec[i],
+      isShake: false,
+    };
+  });
+
+  // SHAKE SLOT — a single budgeted feeding (we keep it to one to avoid stacking
+  // liquid meals). Placement depends on training timing + post-workout hunger:
+  //   • anchor  — a liquid morning feeding (no daytime window / bulk AM protein floor)
+  //   • post    — bridges a gap AFTER training when the lifter is ravenous:
+  //               (a) fasted morning trainer → bridges to the first real meal
+  //               (b) late-evening trainer (big meal pre-gym) → the post-workout feeding
+  //   • pre     — fasted morning trainer who is NOT especially hungry post-workout
+  // Macros are deducted from a real meal so the day still sums to target.
+  const fl = structure.flags || {};
+  const hungry = !!fl.hungryPostWorkout;
+  const eveningNoFit = !!timing.eveningNoFit; // late-evening, big meal sits pre-workout
+
+  let shakeKind = null;
+  let deductFrom = 'first';
+  if (fl.shakePre) {
+    // Fasted/early trainer (incl. no-daytime-window, who'd otherwise get an anchor):
+    // post to bridge hunger after the gym, else pre for muscle preservation.
+    shakeKind = hungry ? 'post' : 'pre';
+    deductFrom = 'first'; // bridges to (or precedes) the first meal either way
+  } else if (fl.shakeAnchor || fl.amProtein) {
+    shakeKind = 'anchor';
+  } else if (eveningNoFit && hungry) {
+    // Late-evening ravenous trainer: a budgeted post-workout feeding.
+    shakeKind = 'post';
+    deductFrom = 'last'; // the big meal was placed before the gym
+  }
+
+  if (shakeKind && meals.length) {
+    const shakeP = direction === 'bulk' ? BULK_AM_PROTEIN_FLOOR : SHAKE_PROTEIN_G;
+    const shakeKcalRaw = Math.max(shakeP * 4, Math.round(code.target * SHAKE_KCAL_PCT));
+    const shakeC = Math.max(0, roundTo5g((shakeKcalRaw - shakeP * 4) / 4));
+    const sp = roundTo5g(shakeP);
+    const shake = {
+      index: -1,
+      kcal: roundToNearest50(sp * 4 + shakeC * 4),
+      protein: sp, fat: 0, carbs: shakeC, fiber: 0,
+      densityBand: null,
+      isShake: true,
+      shakeKind,
+      optional: false,
+    };
+    const tgt = deductFrom === 'last' ? meals[meals.length - 1] : meals[0];
+    const tp = Math.max(0, roundTo5g(tgt.protein - shake.protein));
+    const tc = Math.max(0, roundTo5g(tgt.carbs - shake.carbs));
+    tgt.protein = tp; tgt.carbs = tc;
+    tgt.kcal = roundToNearest50(tp * 4 + tgt.fat * 9 + tc * 4);
+    // 'anchor' and 'pre' lead the day; 'post' renders after the workout (placed in the timeline).
+    if (shakeKind === 'post') meals.push(shake);
+    else meals.unshift(shake);
+  }
+
+  return { meals, tier, mealCount };
+}
 
 // =====================================================
-// SHARED COMPONENTS — mirroring PhysiquePlan
+// WORKOUT TIMING CLASSIFIER (shared by the timeline + the results notes)
+// Morning training (≤cutoff) is the simple case. Evening training (≥cutoff)
+// either fits a big post-workout meal before bed, or doesn't — in which case the
+// largest meal moves BEFORE the gym (kept largest, ≥~2h prior to digest) with a
+// light item after. Handles past-midnight bedtimes via a wake-anchored timeline.
+// NOTE: we deliberately KEEP the last meal as the largest for late-evening
+// trainers (coach preference) rather than flattening the day. To flatten instead,
+// reintroduce a tier override here.
+// =====================================================
+
+function classifyWorkout(wake, sleep, train, trains) {
+  if (!trains || !train) return { trains: false, morning: false, evening: false, fits: false };
+  const cont = (t) => (t < wake ? t + 1440 : t);
+  const sleepC = cont(sleep);
+  const trainC = cont(train);
+  const morning = train <= MORNING_TRAIN_CUTOFF;
+  const evening = train >= EVENING_TRAIN_CUTOFF;
+  let fits = false;
+  if (evening) fits = (trainC + POST_WORKOUT_MEAL_DELAY) <= sleepC - MIN_LAST_MEAL_GAP;
+  return { trains: true, morning, evening, fits, sleepC, trainC, cont };
+}
+
+// Two zones:
+//   PREFIX (human-readable, = the Kahunas template key):
+//     <C|B>-<morning>-<tier>-<kcal>-<meals>
+//     morning: FA (fasted) | LA (light anchor) | EV (even)
+//     tier (cut): LT|MO|HV  ·  tier (bulk): LO|MD|HI
+//   SUFFIX (base64url payload + checksum, = personalization for the graphic):
+//     P|F|C|fiber|wake|sleep|train|dessert|alcohol|shakePre|shakeAnchor|hungryPost|restrictionCSV
+//   Full: MF1-<PREFIX>-<base64url(suffix)>-<ck>
+// Self-contained: pasting the ID alone regenerates the entire results page.
+// =====================================================
+
+const MF_SCHEMA_PREFIX = 'MF1';
+const MORNING_CODE = { fasted: 'FA', light_anchor: 'LA', even: 'EV' };
+const MORNING_DECODE = { FA: 'fasted', LA: 'light_anchor', EV: 'even' };
+const CUT_TIER_CODE = { light: 'LT', moderate: 'MO', heavy: 'HV' };
+const BULK_TIER_CODE = { low: 'LO', mid: 'MD', high: 'HI' };
+const TIER_DECODE = { LT: 'light', MO: 'moderate', HV: 'heavy', LO: 'low', MD: 'mid', HI: 'high' };
+
+function buildTemplateId(code, structure, personalization) {
+  const dir = code.direction === 'cut' ? 'C' : 'B';
+  const tier = code.direction === 'cut' ? structure.backloadTier : structure.loadTier;
+  const tierCode = code.direction === 'cut' ? CUT_TIER_CODE[tier] : BULK_TIER_CODE[tier];
+  const prefix = `${dir}-${MORNING_CODE[structure.morningMode]}-${tierCode}-${code.target}-${structure.mealCount}`;
+
+  const p = personalization;
+  const suffixFields = [
+    code.protein, code.fat, code.carbs, code.fiber,
+    p.wake, p.sleep, p.train,
+    p.dessert ? 1 : 0,
+    p.alcohol ? 1 : 0,
+    p.shakePre ? 1 : 0,
+    p.shakeAnchor ? 1 : 0,
+    p.hungryPostWorkout ? 1 : 0,
+    (structure.flags.restriction || ['none']).join('.'),
+  ];
+  const payload = suffixFields.join('|');
+  const enc = base64urlEncode(payload);
+  const ck = checksum2(`${prefix}|${payload}`);
+  return `${MF_SCHEMA_PREFIX}-${prefix}-${enc}-${ck}`;
+}
+
+// Returns { ok, data } where data reconstructs a code-like object + structure +
+// personalization, enough to fully rebuild the meal plan and results page.
+function decodeTemplateId(raw) {
+  if (!raw || !raw.trim()) return { ok: false, error: 'empty' };
+  const s = raw.trim();
+  if (!s.startsWith(MF_SCHEMA_PREFIX + '-')) {
+    if (/^(SS|MM)\d+-/i.test(s)) return { ok: false, error: 'wrongcode' };
+    return { ok: false, error: 'format' };
+  }
+  // MF1-<C|B>-<MM>-<TT>-<kcal>-<meals>-<enc>-<ck>  → 8 dash-parts
+  const parts = s.split('-');
+  if (parts.length !== 8) return { ok: false, error: 'format' };
+  const [, dir, morn, tierCode, kcalStr, mealsStr, enc, ck] = parts;
+  let payload;
+  try { payload = base64urlDecode(enc); } catch { return { ok: false, error: 'corrupt' }; }
+  const prefix = `${dir}-${morn}-${tierCode}-${kcalStr}-${mealsStr}`;
+  if (checksum2(`${prefix}|${payload}`) !== ck) return { ok: false, error: 'checksum' };
+
+  const f = payload.split('|');
+  if (f.length < 13) return { ok: false, error: 'fields' };
+  const direction = dir === 'C' ? 'cut' : 'bulk';
+  const morningMode = MORNING_DECODE[morn];
+  const tier = TIER_DECODE[tierCode];
+  if (!morningMode || !tier) return { ok: false, error: 'fields' };
+
+  const code = {
+    direction,
+    target: parseInt(kcalStr, 10),
+    protein: parseInt(f[0], 10),
+    fat: parseInt(f[1], 10),
+    carbs: parseInt(f[2], 10),
+    fiber: parseInt(f[3], 10),
+    // weight/height absent from ID → use a neutral heightDiff so density bands
+    // still render (leanness hook simply doesn't tighten on a decoded ID).
+    weight: 0, height: 0, maintenance: 0,
+  };
+  const mealCount = parseInt(mealsStr, 10);
+  const structure = {
+    morningMode, mealCount,
+    backloadTier: direction === 'cut' ? tier : undefined,
+    loadTier: direction === 'bulk' ? tier : undefined,
+    flags: { restriction: (f[12] || 'none').split('.') },
+  };
+  const personalization = {
+    wake: parseInt(f[4], 10), sleep: parseInt(f[5], 10), train: parseInt(f[6], 10),
+    dessert: f[7] === '1', alcohol: f[8] === '1',
+    shakePre: f[9] === '1', shakeAnchor: f[10] === '1',
+    hungryPostWorkout: f[11] === '1',
+  };
+  if (isNaN(code.target) || isNaN(mealCount)) return { ok: false, error: 'fields' };
+  return { ok: true, data: { code, structure, personalization } };
+}
+
+// =====================================================
+// GENERATED PROSE  (tagged bank → assembled by flags; the coaching voice)
+// =====================================================
+
+function buildDescription(code, structure, p) {
+  const lines = [];
+  const isCut = code.direction === 'cut';
+  const mm = structure.morningMode;
+
+  // Opening — morning
+  if (mm === 'fasted') {
+    lines.push(`Wake around ${minutesToClock(p.wake)}. Skip breakfast — water and 1–3 cups of black coffee carry you through the morning fast and blunt hunger.`);
+  } else if (mm === 'light_anchor') {
+    lines.push(`Wake around ${minutesToClock(p.wake)}. Start with a small, high-protein, low-calorie first meal — a protein shake/smoothie, lean meat and veg, or low-fat cheese and fruit. Keep it modest so most of your budget is saved for later.`);
+  } else {
+    lines.push(`Wake around ${minutesToClock(p.wake)} and eat a real breakfast — protein and fiber forward — then keep meals fairly even across the day.`);
+  }
+
+  if (p.shakePre) {
+    lines.push('You train before your first meal, so have a protein shake (~25g protein) before lifting to keep amino acids available until you eat.');
+  }
+
+  // Middle — the structure
+  if (isCut) {
+    if (structure.backloadTier === 'heavy') {
+      lines.push('Front-load your protein and fiber in the earlier meals — lean protein and vegetables, low calorie density, very filling. Save the largest, most flexible calorie budget for dinner, where you can eat what\'s served (family meals, social dinners) without blowing the deficit.');
+    } else if (structure.backloadTier === 'moderate') {
+      lines.push('Keep your earlier meals protein- and fiber-forward with low calorie density. Your dinner is the largest meal — enough budget to feel satisfied while staying in the deficit.');
+    } else {
+      lines.push('Keep all your meals balanced, high in protein and fiber, and low in calorie density — think lean protein, vegetables, and lower-density carbs like potatoes or rice. Similar-sized meals work well for you.');
+    }
+  } else {
+    if (structure.loadTier === 'high') {
+      lines.push('Spread your food across more meals and lean on higher-calorie, easy-to-eat foods. Add snacks between meals (nuts, trail mix, protein bars, dried fruit) and don\'t over-fill on vegetables — you need room for calories.');
+    } else if (structure.loadTier === 'mid') {
+      lines.push('Eat evenly across your meals with a moderate calorie density. Keep protein in every meal and add calories where it\'s easy.');
+    } else {
+      lines.push('Approach this bulk much like a cut: a moderate number of balanced meals, lower calorie density, protein in each. Your surplus is small, so a little restraint keeps the bulk lean.');
+    }
+  }
+
+  if (p.train && structure.flags?.workout !== 'none') {
+    lines.push(`Train around ${minutesToClock(p.train)}. Aim to have your workout sit between two protein feedings no more than ~6 hours apart.`);
+  }
+
+  // Treats / dessert (single-package portion control)
+  if (p.dessert) {
+    lines.push('For sweets: buy them in single-serving packages (one chocolate bar, one ice cream cone, one cookie) and eat the whole package — never open a big bag and try to stop. The package is your portion control.');
+  }
+
+  // Alcohol
+  if (p.alcohol && isCut) {
+    lines.push('On a day you drink, bank the calories by cutting some carbs and fat earlier so 1–2 drinks fit your budget. Favor lower-calorie options (spirits with zero-cal mixers).');
+  }
+
+  // Close
+  if (isCut) {
+    lines.push(`Don\'t snack between meals — when you eat, eat a full meal. End your eating by around ${minutesToClock(p.sleep - 60)} and take only water until your first meal tomorrow. Once a week, schedule a maintenance/refeed day on a social occasion.`);
+  } else {
+    lines.push('Keep protein in every meal and stay consistent. If the scale stalls for a few weeks, add calories before adding stress.');
+  }
+
+  return lines;
+}
+
+// =====================================================
+// SEED MEAL LIBRARY (tiny — full tagged library + photos arrive in Artifact B)
+// Each entry: slot eligibility, macros, gramWeight (→ density), palatability,
+// restriction tags. The matcher surfaces the nearest 1–2 by density+protein fit.
+// =====================================================
+
+const SEED_LIBRARY = [
+  // slot: 'early' | 'mid' | 'dinner' | 'anchor'
+  { name: 'Tofu scramble + mushrooms', slot: ['early','mid'], kcal: 580, p: 48, f: 27, c: 44, g: 520, pal: 'enjoyable', diet: ['vegan','vegetarian','nomeat','none'] },
+  { name: 'Burrito bowl (plant mince + veg)', slot: ['early','mid'], kcal: 660, p: 45, f: 27, c: 59, g: 650, pal: 'enjoyable', diet: ['vegan','vegetarian','nomeat','none'] },
+  { name: 'Chicken, veg & potatoes', slot: ['early','mid','dinner'], kcal: 620, p: 55, f: 18, c: 60, g: 600, pal: 'enjoyable', diet: ['none','nopork','pescatarian'] },
+  { name: 'Protein smoothie', slot: ['anchor'], kcal: 300, p: 35, f: 6, c: 28, g: 400, pal: 'enjoyable', diet: ['vegan','vegetarian','nomeat','none'], liquid: true },
+  { name: 'Lean meat wraps + veg', slot: ['dinner'], kcal: 830, p: 54, f: 22, c: 110, g: 700, pal: 'enjoyable', diet: ['none','nopork'] },
+  { name: 'Veggie burgers + side veg', slot: ['dinner'], kcal: 740, p: 43, f: 21, c: 109, g: 650, pal: 'hyperpalatable', diet: ['vegan','vegetarian','nomeat','none'] },
+  { name: 'Family pasta (lean meat + sauce)', slot: ['dinner'], kcal: 900, p: 50, f: 26, c: 120, g: 550, pal: 'hyperpalatable', diet: ['none','nopork','vegetarian'] },
+];
+
+function matchMeals(meal, slotName, restriction) {
+  const restr = (restriction && restriction.length) ? restriction : ['none'];
+  const noRestr = restr.includes('none');
+  return SEED_LIBRARY
+    .filter((d) => d.slot.includes(slotName))
+    .filter((d) => noRestr || d.diet.some((t) => restr.includes(t)))
+    .map((d) => {
+      const density = d.kcal / d.g;
+      const inBand = density >= meal.densityBand[0] && density <= meal.densityBand[1];
+      const proteinFit = Math.abs(d.p - meal.protein);
+      return { ...d, density: Math.round(density * 100) / 100, inBand, proteinFit };
+    })
+    .sort((a, b) => (b.inBand - a.inBand) || (a.proteinFit - b.proteinFit))
+    .slice(0, 2);
+}
+
+function slotNameFor(i, count, morningMode) {
+  if (i === count - 1) return 'dinner';
+  if (i === 0) {
+    if (morningMode === 'fasted') return 'early';
+    return 'early';
+  }
+  return 'mid';
+}
+
+// =====================================================
+// SHARED UI  (mirrors MacroMetric / PhysiquePlan)
 // =====================================================
 
 const Container = ({ children }) => (
   <div className="min-h-screen bg-stone-50 flex flex-col" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>
-    <Header />
-    <main className="flex-1 flex items-center justify-center px-4 py-8">
-      {children}
-    </main>
-    <Footer />
+    <Header /><main className="flex-1 flex items-center justify-center px-4 py-8">{children}</main><Footer />
   </div>
 );
-
 const LOGO_URL = '/logo.png';
-
-const Logo = ({ size = 32 }) => {
-  if (LOGO_URL) {
-    return (
-      <img
-        src={LOGO_URL}
-        alt="ShredSmart logo"
-        width={size}
-        height={size}
-        className="rounded-lg"
-        style={{ width: size, height: size }}
-      />
-    );
-  }
+const Logo = ({ size = 32 }) => (
+  <img src={LOGO_URL} alt="ShredSmart logo" width={size} height={size} className="rounded-lg" style={{ width: size, height: size }} />
+);
+const Header = () => (
+  <header className="w-full px-6 py-4 flex items-center justify-between border-b border-stone-200 bg-white">
+    <div className="flex items-center gap-2.5"><Logo size={32} /><span className="font-semibold text-stone-900 tracking-tight">ShredSmart™</span></div>
+    <span className="text-xs text-stone-500 tracking-wider">MealFrame™</span>
+  </header>
+);
+const Footer = () => (
+  <footer className="w-full px-6 py-4 border-t border-stone-200 bg-white text-xs text-stone-500 flex justify-between">
+    <span>ShredSmart™</span><span>by Radu Antoniu</span>
+  </footer>
+);
+const Card = ({ children, className = '' }) => (
+  <div className={`bg-white border border-stone-200 rounded-2xl shadow-sm p-8 max-w-xl w-full ${className}`}>{children}</div>
+);
+const PrimaryButton = ({ onClick, children, disabled = false, className = '' }) => (
+  <button onClick={onClick} disabled={disabled}
+    className={`w-full ${disabled ? 'bg-stone-300 cursor-not-allowed text-stone-500' : 'bg-stone-900 hover:bg-stone-800 text-white'} font-medium py-3.5 px-6 rounded-full transition-colors flex items-center justify-center gap-2 ${className}`}>
+    {children}
+  </button>
+);
+const SecondaryButton = ({ onClick, children, className = '' }) => (
+  <button onClick={onClick} className={`w-full bg-stone-100 hover:bg-stone-200 text-stone-900 font-medium py-3.5 px-6 rounded-full transition-colors flex items-center justify-center gap-2 ${className}`}>{children}</button>
+);
+const BackButton = ({ onClick }) => (
+  <button onClick={onClick} className="flex items-center gap-1.5 text-sm text-stone-500 hover:text-stone-900 transition-colors mb-4"><ArrowLeft className="w-4 h-4" /> Back</button>
+);
+const StepIndicator = ({ current, total }) => (
+  <div className="flex items-center gap-2 mb-8">
+    {Array.from({ length: total }).map((_, i) => (
+      <div key={i} className={`h-1.5 flex-1 rounded-full transition-colors ${i < current ? 'bg-orange-500' : 'bg-stone-200'}`} />
+    ))}
+  </div>
+);
+const QAItem = ({ question, children }) => {
+  const [open, setOpen] = useState(false);
   return (
-    <div
-      className="rounded-lg bg-stone-200 border border-stone-300 flex items-center justify-center"
-      style={{ width: size, height: size }}
-    >
-      <span className="text-stone-400 text-[10px] font-medium">LOGO</span>
+    <div className="border border-stone-200 rounded-xl overflow-hidden">
+      <button onClick={() => setOpen(!open)} className="w-full px-5 py-4 flex items-center justify-between text-left hover:bg-stone-50 transition-colors">
+        <span className="font-medium text-stone-900 text-sm pr-3">{question}</span>
+        {open ? <ChevronUp className="w-4 h-4 text-stone-500 flex-shrink-0" /> : <ChevronDown className="w-4 h-4 text-stone-500 flex-shrink-0" />}
+      </button>
+      {open && <div className="px-5 pb-4 text-sm text-stone-700 leading-relaxed border-t border-stone-200 pt-3">{children}</div>}
     </div>
   );
 };
 
-const Header = () => (
-  <header className="w-full px-6 py-4 flex items-center justify-between border-b border-stone-200 bg-white">
-    <div className="flex items-center gap-2.5">
-      <Logo size={32} />
-      <span className="font-semibold text-stone-900 tracking-tight">ShredSmart™</span>
-    </div>
-    <span className="text-xs text-stone-500 tracking-wider">MacroMetric™</span>
-  </header>
-);
-
-const Footer = () => (
-  <footer className="w-full px-6 py-4 border-t border-stone-200 bg-white text-xs text-stone-500 flex justify-between">
-    <span>ShredSmart™</span>
-    <span>by Radu Antoniu</span>
-  </footer>
-);
-
-const Card = ({ children, className = '' }) => (
-  <div className={`bg-white border border-stone-200 rounded-2xl shadow-sm p-8 max-w-xl w-full ${className}`}>
-    {children}
-  </div>
-);
-
-const PrimaryButton = ({ onClick, children, disabled = false, className = '' }) => (
-  <button
-    onClick={onClick}
-    disabled={disabled}
-    className={`w-full ${disabled ? 'bg-stone-300 cursor-not-allowed text-stone-500' : 'bg-stone-900 hover:bg-stone-800 text-white'} font-medium py-3.5 px-6 rounded-full transition-colors flex items-center justify-center gap-2 ${className}`}
-  >
-    {children}
-  </button>
-);
-
-const SecondaryButton = ({ onClick, children, className = '' }) => (
-  <button
-    onClick={onClick}
-    className={`w-full bg-stone-100 hover:bg-stone-200 text-stone-900 font-medium py-3.5 px-6 rounded-full transition-colors flex items-center justify-center gap-2 ${className}`}
-  >
-    {children}
-  </button>
-);
-
-const BackButton = ({ onClick }) => (
-  <button
-    onClick={onClick}
-    className="flex items-center gap-1.5 text-sm text-stone-500 hover:text-stone-900 transition-colors mb-4"
-  >
-    <ArrowLeft className="w-4 h-4" /> Back
-  </button>
-);
-
-const StepIndicator = ({ current, total }) => (
-  <div className="flex items-center gap-2 mb-8">
-    {Array.from({ length: total }).map((_, i) => (
-      <div
-        key={i}
-        className={`h-1.5 flex-1 rounded-full transition-colors ${
-          i < current ? 'bg-orange-500' : 'bg-stone-200'
-        }`}
-      />
-    ))}
-  </div>
-);
-
 // =====================================================
-// PLAN SETUP SCREENS
+// SCREENS
 // =====================================================
 
-const LandingScreen = ({ onStart, onCheckIn }) => (
+const LandingScreen = ({ onStart, onDecode }) => (
   <Card className="max-w-3xl">
     <div className="grid md:grid-cols-2 gap-10 items-center">
       <div>
-        <span className="text-xs font-semibold text-orange-600 tracking-widest">MacroMetric™</span>
+        <span className="text-xs font-semibold text-orange-600 tracking-widest">MealFrame™</span>
         <h1 className="mt-3 text-4xl md:text-5xl font-bold text-stone-900 tracking-tight leading-tight">
-          Get your <em className="italic font-semibold text-orange-600">nutrition targets</em>.
+          Turn your macros into a <em className="italic font-semibold text-orange-600">meal structure</em>.
         </h1>
         <p className="mt-4 text-stone-600 leading-relaxed">
-          The exact calories and macros to eat each day over your 12-week PhysiquePlan. Built around your strength profile, scaled to your body, designed to actually work.
+          You've got your numbers from MacroMetric™. Now MealFrame builds the day around them — how many meals, when, and how to split your food so hitting your targets is as easy as possible.
         </p>
       </div>
       <div className="bg-stone-50 border border-stone-200 rounded-xl p-6">
         <h2 className="font-semibold text-stone-900">What you'll get</h2>
         <ul className="mt-3 space-y-2.5 text-sm text-stone-700">
-          <li className="flex gap-2">
-            <Check className="w-4 h-4 text-orange-500 flex-shrink-0 mt-0.5" />
-            <span>Your target rate of fat loss or weight gain</span>
-          </li>
-          <li className="flex gap-2">
-            <Check className="w-4 h-4 text-orange-500 flex-shrink-0 mt-0.5" />
-            <span>Exact calories and macros to eat daily</span>
-          </li>
-          <li className="flex gap-2">
-            <Check className="w-4 h-4 text-orange-500 flex-shrink-0 mt-0.5" />
-            <span>The pitfalls to avoid that derail most lifters</span>
-          </li>
-          <li className="flex gap-2">
-            <Check className="w-4 h-4 text-orange-500 flex-shrink-0 mt-0.5" />
-            <span>Confidence in your numbers — no more guessing</span>
-          </li>
+          {['Your meal count and timing','How to split calories & macros across the day','Sample meals that fit each slot','A structure ID you (and your coach) can reload anytime'].map((t,i)=>(
+            <li key={i} className="flex gap-2"><Check className="w-4 h-4 text-orange-500 flex-shrink-0 mt-0.5" /><span>{t}</span></li>
+          ))}
         </ul>
-        <div className="mt-5">
-          <PrimaryButton onClick={onStart}>
-            Set up my plan <ArrowRight className="w-4 h-4" />
-          </PrimaryButton>
-        </div>
-        <button
-          onClick={onCheckIn}
-          className="mt-2 w-full bg-stone-50 hover:bg-stone-100 text-stone-900 font-medium py-3.5 px-6 rounded-full transition-colors text-sm border border-stone-200"
-        >
-          I'm in the middle of a 12-week plan
+        <div className="mt-5"><PrimaryButton onClick={onStart}>Build my meal structure <ArrowRight className="w-4 h-4" /></PrimaryButton></div>
+        <button onClick={onDecode} className="mt-2 w-full bg-stone-50 hover:bg-stone-100 text-stone-900 font-medium py-3.5 px-6 rounded-full transition-colors text-sm border border-stone-200">
+          I already have a MealFrame™ ID
         </button>
         <p className="text-xs text-stone-500 text-center mt-3">Takes about 3 minutes.</p>
       </div>
@@ -771,1437 +1016,487 @@ const LandingScreen = ({ onStart, onCheckIn }) => (
   </Card>
 );
 
-// --- CODE INGESTION (replaces units + physique-check + archetype + direction) ---
-
-const CODE_ERROR_COPY = {
-  version: "This code is from a newer version of PhysiquePlan™. Re-run PhysiquePlan to get a compatible code.",
-  checksum: "That code doesn't look right — a character may be off. Copy it again from your PhysiquePlan™ blueprint, or use the “Continue to MacroMetric™” button there to skip typing.",
-  corrupt: "That code couldn't be read. Copy it again from your PhysiquePlan™ blueprint, or use the “Continue to MacroMetric™” button there.",
-  format: "That doesn't look like a ShredSmart code. It should start with “SS1-”. Copy it again from your PhysiquePlan™ blueprint.",
-  fields: "That code is incomplete. Re-copy the full code from your PhysiquePlan™ blueprint.",
-  empty: "Paste your code to continue.",
-};
-
-// Error copy for the MM1 code the CHECK-IN flow ingests.
 const MM_CODE_ERROR_COPY = {
-  version: "This code is from a newer version of MacroMetric™. Re-run your MacroMetric plan to get a compatible code.",
-  wrongcode: "That looks like a PhysiquePlan™ code (SS1), not a MacroMetric™ code. Paste the MacroMetric code from the end of your plan or your last check-in.",
-  checksum: "That code doesn't look right — a character may be off. Copy it again from MacroMetric™ (end of your plan, or your last check-in result).",
-  corrupt: "That code couldn't be read. Copy it again from MacroMetric™.",
-  format: "That doesn't look like a MacroMetric™ code. It should start with “MM1-”.",
-  fields: "That code is incomplete or from an older version of MacroMetric™. Re-run your MacroMetric plan to get a current code.",
-  empty: "Paste your MacroMetric™ code to continue.",
+  version: 'This code is from a newer version of MacroMetric™. Re-run MacroMetric to get a compatible code.',
+  wrongcode: 'That looks like a PhysiquePlan™ code (SS1). Paste your MacroMetric™ code (starts with “MM1-”).',
+  checksum: 'That code doesn\'t look right — a character may be off. Copy it again from MacroMetric™, or use the “Continue to MealFrame™” button there.',
+  corrupt: 'That code couldn\'t be read. Copy it again from MacroMetric™.',
+  format: 'That doesn\'t look like a MacroMetric™ code. It should start with “MM1-”.',
+  fields: 'That code is incomplete or from an older version of MacroMetric™. Re-run your MacroMetric plan to get a current code.',
+  empty: 'Paste your MacroMetric™ code to continue.',
 };
-
-const PLAN_URL = 'https://plan.raduantoniu.com';
 
 const CodeScreen = ({ initialCode = '', initialError = null, onDecoded, onBack }) => {
   const [code, setCode] = useState(initialCode);
   const [error, setError] = useState(initialError);
-
   const submit = () => {
-    const res = decodeShredSmartCode(code);
-    if (!res.ok) {
-      setError(res.error);
-      return;
-    }
+    const res = decodeMacroMetricCode(code);
+    if (!res.ok) { setError(res.error); return; }
     onDecoded(res.data, code);
   };
-
   return (
     <Card>
       <BackButton onClick={onBack} />
-      <div>
-        <span className="text-xs font-semibold text-stone-400 tracking-widest uppercase">Bring your plan over</span>
-        <h2 className="mt-2 text-2xl font-bold text-stone-900">Paste your PhysiquePlan™ code</h2>
-        <p className="text-stone-600 mt-2 text-sm">
-          PhysiquePlan generated a code at the bottom of your blueprint. Paste it here and MacroMetric pre-fills everything — your stats, your strength tier, your direction. No re-entering anything.
-        </p>
-
-        <div className="mt-5">
-          <label className="text-sm font-medium text-stone-700">Your code</label>
-          <input
-            type="text"
-            value={code}
-            onChange={(e) => { setCode(e.target.value); if (error) setError(null); }}
-            placeholder="SS1-…"
-            spellCheck={false}
-            autoCapitalize="off"
-            autoCorrect="off"
-            className="mt-1 w-full px-4 py-3 rounded-lg border border-stone-200 bg-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500"
-          />
-          {error && (
-            <p className="text-sm text-red-600 mt-2 leading-relaxed">{CODE_ERROR_COPY[error] || CODE_ERROR_COPY.format}</p>
-          )}
-        </div>
-
-        <PrimaryButton onClick={submit} disabled={!code.trim()} className="mt-5">
-          Load my plan <ArrowRight className="w-4 h-4" />
-        </PrimaryButton>
-
-        <a
-          href={PLAN_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-2 w-full bg-stone-100 hover:bg-stone-200 text-stone-900 font-medium py-3.5 px-6 rounded-full transition-colors text-center flex items-center justify-center gap-2 text-sm"
-        >
-          I don't have a code — do PhysiquePlan™ first <ExternalLink className="w-4 h-4" />
-        </a>
+      <span className="text-xs font-semibold text-stone-400 tracking-widest uppercase">Bring your targets over</span>
+      <h2 className="mt-2 text-2xl font-bold text-stone-900">Paste your MacroMetric™ code</h2>
+      <p className="text-stone-600 mt-2 text-sm">MacroMetric generated a code with your calories and macros. Paste it here and MealFrame builds your structure around it — no re-entering numbers.</p>
+      <div className="mt-5">
+        <label className="text-sm font-medium text-stone-700">Your code</label>
+        <input type="text" value={code} onChange={(e)=>{setCode(e.target.value); if(error)setError(null);}} placeholder="MM1-…" spellCheck={false} autoCapitalize="off" autoCorrect="off"
+          className="mt-1 w-full px-4 py-3 rounded-lg border border-stone-200 bg-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500" />
+        {error && <p className="text-sm text-red-600 mt-2 leading-relaxed">{MM_CODE_ERROR_COPY[error] || MM_CODE_ERROR_COPY.format}</p>}
       </div>
+      <PrimaryButton onClick={submit} disabled={!code.trim()} className="mt-5">Load my targets <ArrowRight className="w-4 h-4" /></PrimaryButton>
+      <a href={MACROMETRIC_URL} target="_blank" rel="noopener noreferrer"
+        className="mt-2 w-full bg-stone-100 hover:bg-stone-200 text-stone-900 font-medium py-3.5 px-6 rounded-full transition-colors text-center flex items-center justify-center gap-2 text-sm">
+        I don't have a code — do MacroMetric™ first <ExternalLink className="w-4 h-4" />
+      </a>
     </Card>
   );
 };
 
-const StalenessNotice = ({ weeks, onRerun }) => (
-  <div className="mt-4 bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3">
-    <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-    <div className="text-sm text-stone-700">
-      <span className="font-medium text-stone-900">These numbers are a few months old.</span> Your plan was generated about {Math.round(weeks / 4)} months ago — your body has likely moved on. You can proceed, but a fresh PhysiquePlan read will be more accurate.
-      <button onClick={onRerun} className="mt-2 text-amber-700 font-medium underline underline-offset-2 hover:text-amber-800">
-        Re-run PhysiquePlan™
-      </button>
-    </div>
-  </div>
-);
-
-// Confirmation + intro, shown once a code is loaded.
-const IntroScreen = ({ decoded, units, onContinue, onBack, onRerun }) => {
-  const tierLabel = subBracketTierLabel(decoded.tier, decoded.subBracket);
-  const dirLabel = decoded.direction === 'cut' ? 'Cut (lose fat)' : 'Lean bulk (build muscle)';
-  const weeks = genDateAgeWeeks(decoded.genDate);
+const IntroScreen = ({ code, units, onContinue, onBack }) => {
+  const isCut = code.direction === 'cut';
+  const weeks = genDateAgeWeeks(code.genDate);
   const stale = weeks !== null && weeks > 12;
-  const block = compute12WeekRange(decoded);
-
   return (
     <Card>
       <BackButton onClick={onBack} />
       <div className="text-center">
-        <span className="text-xs font-semibold text-orange-600 tracking-widest uppercase">Plan loaded</span>
-        <h2 className="mt-2 text-3xl font-bold text-stone-900">Got it — let's set your targets.</h2>
-        <p className="text-stone-600 mt-3 leading-relaxed text-sm">
-          This takes about 3 minutes. We just need your age and activity — everything else came over in your code.
-        </p>
+        <span className="text-xs font-semibold text-orange-600 tracking-widest uppercase">Targets loaded</span>
+        <h2 className="mt-2 text-3xl font-bold text-stone-900">Let's build your day.</h2>
+        <p className="text-stone-600 mt-3 leading-relaxed text-sm">A few questions about your schedule and how you like to eat. Then MealFrame structures your {isCut ? 'cut' : 'bulk'} around your numbers.</p>
       </div>
-
-      <div className="mt-5 bg-stone-50 border border-stone-200 rounded-xl p-5 text-left">
-        <div className="grid grid-cols-2 gap-3 text-sm">
-          <div>
-            <div className="text-xs text-stone-500 uppercase tracking-wider">Strength tier</div>
-            <div className="font-semibold text-stone-900 mt-0.5">{tierLabel}</div>
-          </div>
-          <div>
-            <div className="text-xs text-stone-500 uppercase tracking-wider">Direction</div>
-            <div className="font-semibold text-stone-900 mt-0.5">{dirLabel}</div>
-          </div>
-          <div>
-            <div className="text-xs text-stone-500 uppercase tracking-wider">Current weight</div>
-            <div className="font-semibold text-stone-900 mt-0.5">{formatWeight(decoded.weight, units)}</div>
-          </div>
-          <div>
-            <div className="text-xs text-stone-500 uppercase tracking-wider">12-week target</div>
-            <div className="font-semibold text-stone-900 mt-0.5">{formatWeightRange(block.low, block.high, units)}</div>
-          </div>
+      <div className="mt-5 bg-stone-50 border border-stone-200 rounded-xl p-5 text-left grid grid-cols-2 gap-3 text-sm">
+        <div><div className="text-xs text-stone-500 uppercase tracking-wider">Direction</div><div className="font-semibold text-stone-900 mt-0.5">{isCut ? 'Cut' : 'Lean bulk'}</div></div>
+        <div><div className="text-xs text-stone-500 uppercase tracking-wider">Daily calories</div><div className="font-semibold text-stone-900 mt-0.5">{code.target} kcal</div></div>
+        <div><div className="text-xs text-stone-500 uppercase tracking-wider">Protein</div><div className="font-semibold text-stone-900 mt-0.5">{code.protein}g</div></div>
+        <div><div className="text-xs text-stone-500 uppercase tracking-wider">Fat · Carbs · Fiber</div><div className="font-semibold text-stone-900 mt-0.5">{code.fat} · {code.carbs} · {code.fiber}g</div></div>
+      </div>
+      {stale && (
+        <div className="mt-4 bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3">
+          <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+          <div className="text-sm text-stone-700"><span className="font-medium text-stone-900">These targets are a few months old.</span> Consider a fresh MacroMetric check-in for the most accurate numbers — but you can proceed.</div>
         </div>
+      )}
+      <PrimaryButton onClick={onContinue} className="mt-6">Start the questions <ArrowRight className="w-4 h-4" /></PrimaryButton>
+    </Card>
+  );
+};
+
+// Paginated questionnaire driven by the config arrays.
+const PER_PAGE = 3;
+const QuestionnaireScreen = ({ direction, answers, setAnswers, onComplete, onBack }) => {
+  const questions = direction === 'cut' ? CUT_QUESTIONS : BULK_QUESTIONS;
+  const pages = [];
+  for (let i = 0; i < questions.length; i += PER_PAGE) pages.push(questions.slice(i, i + PER_PAGE));
+  const [page, setPage] = useState(0);
+  const current = pages[page];
+
+  const setAnswer = (id, value, multi) => {
+    setAnswers((prev) => {
+      if (multi) {
+        const cur = Array.isArray(prev[id]) ? prev[id] : [];
+        let next;
+        if (value === 'none') next = ['none'];
+        else { next = cur.filter((v) => v !== 'none'); next = next.includes(value) ? next.filter((v)=>v!==value) : [...next, value]; if (next.length===0) next=['none']; }
+        return { ...prev, [id]: next };
+      }
+      return { ...prev, [id]: value };
+    });
+  };
+
+  const pageComplete = current.every((qq) => {
+    const v = answers[qq.id];
+    return qq.multi ? (Array.isArray(v) && v.length > 0) : (v !== undefined && v !== null);
+  });
+
+  const next = () => { if (page < pages.length - 1) setPage(page + 1); else onComplete(); };
+  const prev = () => { if (page > 0) setPage(page - 1); else onBack(); };
+
+  return (
+    <Card className="max-w-2xl">
+      <BackButton onClick={prev} />
+      <StepIndicator current={page + 1} total={pages.length} />
+      <span className="text-xs font-semibold text-stone-400 tracking-widest uppercase">Page {page + 1} of {pages.length}</span>
+      <div className="mt-3 space-y-6">
+        {current.map((qq) => (
+          <div key={qq.id}>
+            <label className="text-sm font-medium text-stone-900">{qq.q}</label>
+            {qq.multi && <p className="text-xs text-stone-500 mt-0.5">Select all that apply</p>}
+            <div className="space-y-2 mt-2">
+              {qq.options.map(([val, label]) => {
+                const sel = qq.multi ? (Array.isArray(answers[qq.id]) && answers[qq.id].includes(val)) : answers[qq.id] === val;
+                return (
+                  <button key={val} onClick={() => setAnswer(qq.id, val, qq.multi)}
+                    className={`w-full text-left p-3 rounded-lg border transition-colors text-sm ${sel ? 'border-orange-500 bg-orange-50' : 'border-stone-200 hover:border-orange-500 hover:bg-orange-50'}`}>
+                    <span className="font-medium text-stone-900">{label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </div>
-
-      {stale && <StalenessNotice weeks={weeks} onRerun={onRerun} />}
-
-      <PrimaryButton onClick={onContinue} className="mt-6">
-        Let's go <ArrowRight className="w-4 h-4" />
+      <PrimaryButton onClick={next} disabled={!pageComplete} className="mt-6">
+        {page < pages.length - 1 ? 'Next' : 'Build my structure'} <ArrowRight className="w-4 h-4" />
       </PrimaryButton>
     </Card>
   );
 };
 
-const PrincipleScreen = ({ onContinue, onBack }) => (
-  <Card>
-    <BackButton onClick={onBack} />
-    <h2 className="text-2xl font-bold text-stone-900">Before we calculate — read this.</h2>
-    <p className="text-stone-600 mt-2 text-sm">Most macro calculators give you four numbers and demand you hit all four perfectly. That's unrealistic and unnecessary.</p>
+// Collects the personal clock that drives the timeline + the ID's personalization
+// zone. Train is hidden when the person doesn't train. Shown after the questionnaire.
+const TimesScreen = ({ initial, showTrain, onContinue, onBack }) => {
+  // Whole-hour granularity, selected as a plain 1–24 number (24 = midnight).
+  const toHour = (mins) => (mins === 0 ? 24 : Math.round(mins / 60));
+  const fromHour = (h) => (Number(h) % 24) * 60;
+  const [wakeH, setWakeH] = useState(toHour(initial?.wake ?? DEFAULT_WAKE));
+  const [sleepH, setSleepH] = useState(toHour(initial?.sleep ?? DEFAULT_SLEEP));
+  const [trainH, setTrainH] = useState(toHour(initial?.train ?? DEFAULT_TRAIN));
+  const valid = wakeH && sleepH && (!showTrain || trainH);
 
-    <div className="mt-6 space-y-4">
-      <div className="bg-orange-50 border border-orange-200 rounded-xl p-5">
-        <span className="text-xs font-semibold text-orange-700 uppercase tracking-wider">What actually matters</span>
-        <p className="text-stone-900 font-medium mt-1">Hit your calories and protein.</p>
-        <p className="text-stone-700 text-sm mt-2">
-          These two numbers drive your results. As long as you're consistent on both, your body will respond.
-        </p>
-      </div>
-
-      <div className="bg-stone-50 border border-stone-200 rounded-xl p-5">
-        <span className="text-xs font-semibold text-stone-500 uppercase tracking-wider">What's a floor, not a target</span>
-        <p className="text-stone-900 font-medium mt-1">Fat and carbs are minimums.</p>
-        <p className="text-stone-600 text-sm mt-2">
-          You'll get prescribed numbers, but think of them as floors. Some days fat will be 40% of calories, some days 25%. Fine. Just don't consistently drop below <strong>~60g of fat</strong> (for hormones and satiety) or below <strong>~100g of carbs cutting / 200g bulking</strong> (for sleep and training).
-        </p>
-      </div>
+  const HourField = ({ label, sub, value, onChange, icon: I }) => (
+    <div>
+      <label className="text-sm font-medium text-stone-700 flex items-center gap-2"><I className="w-4 h-4 text-stone-400" /> {label}</label>
+      {sub && <p className="text-xs text-stone-500 mt-0.5">{sub}</p>}
+      <select value={value} onChange={(e) => onChange(Number(e.target.value))}
+        className="mt-1 w-full px-4 py-3 rounded-lg border border-stone-200 bg-white appearance-none focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500">
+        {Array.from({ length: 24 }, (_, i) => i + 1).map((h) => (
+          <option key={h} value={h}>{h}:00</option>
+        ))}
+      </select>
     </div>
-
-    <p className="text-stone-600 text-sm mt-4">
-      Hit calories and protein. Stay above the fat and carb floors. That's the system.
-    </p>
-
-    <PrimaryButton onClick={onContinue} className="mt-6">
-      Got it — let's set my targets <ArrowRight className="w-4 h-4" />
-    </PrimaryButton>
-  </Card>
-);
-
-// Age + activity in one screen (height/weight came from the code).
-const DetailsScreen = ({ onContinue, currentStep, totalSteps, onBack }) => {
-  const [age, setAge] = useState('');
-  const [workouts, setWorkouts] = useState('');
-  const [cardio, setCardio] = useState('');
-  const [steps, setSteps] = useState('');
-  const [job, setJob] = useState('');
-
-  const ageValue = parseInt(age);
-  const isValid =
-    ageValue >= 16 && ageValue <= 90 &&
-    workouts !== '' && parseInt(workouts) >= 0 && parseInt(workouts) <= 14 &&
-    cardio !== '' && parseInt(cardio) >= 0 && parseInt(cardio) <= 2000 &&
-    steps !== '' && parseInt(steps) >= 0 && parseInt(steps) <= 50000 &&
-    job !== '';
+  );
 
   return (
     <Card>
       <BackButton onClick={onBack} />
-      <StepIndicator current={currentStep} total={totalSteps} />
-      <span className="text-xs font-semibold text-stone-400 tracking-widest uppercase">STEP {currentStep} OF {totalSteps}</span>
-      <h2 className="mt-2 text-2xl font-bold text-stone-900">A few details for your maintenance</h2>
-      <p className="text-stone-600 mt-2 text-sm">Concrete numbers, not vibes. This lets us calculate your real expenditure instead of guessing.</p>
-
+      <span className="text-xs font-semibold text-stone-400 tracking-widest uppercase">Your daily schedule</span>
+      <h2 className="mt-2 text-2xl font-bold text-stone-900">What's your daily schedule?</h2>
+      <p className="text-stone-600 mt-2 text-sm">Times are on a 24-hour clock (so 7 = 7am, 19 = 7pm, 24 = midnight). Pick the nearest hour — eating 30–45 minutes either side of a target is no problem.</p>
       <div className="space-y-4 mt-5">
-        <div>
-          <label className="text-sm font-medium text-stone-700">Age (years)</label>
-          <input
-            type="number"
-            value={age}
-            onChange={(e) => setAge(e.target.value)}
-            placeholder="e.g. 30"
-            className="mt-1 w-full px-4 py-3 rounded-lg border border-stone-200 bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500"
-          />
-        </div>
-        <div>
-          <label className="text-sm font-medium text-stone-700">Workouts per week</label>
-          <input
-            type="number"
-            value={workouts}
-            onChange={(e) => setWorkouts(e.target.value)}
-            placeholder="e.g. 4"
-            className="mt-1 w-full px-4 py-3 rounded-lg border border-stone-200 bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500"
-          />
-          <p className="text-xs text-stone-500 mt-1">Resistance training sessions (lifts, calisthenics, etc.)</p>
-        </div>
-        <div>
-          <label className="text-sm font-medium text-stone-700">Average steps per day</label>
-          <input
-            type="number"
-            value={steps}
-            onChange={(e) => setSteps(e.target.value)}
-            placeholder="e.g. 8000"
-            className="mt-1 w-full px-4 py-3 rounded-lg border border-stone-200 bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500"
-          />
-          <p className="text-xs text-stone-500 mt-1">From your phone or watch — your honest average. This already covers all your walking, running, and hiking.</p>
-        </div>
-        <div>
-          <label className="text-sm font-medium text-stone-700">Cardio that doesn't add steps (minutes/week)</label>
-          <input
-            type="number"
-            value={cardio}
-            onChange={(e) => setCardio(e.target.value)}
-            placeholder="e.g. 60"
-            className="mt-1 w-full px-4 py-3 rounded-lg border border-stone-200 bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500"
-          />
-          <p className="text-xs text-stone-500 mt-1">
-            <strong>Only</strong> activities that don't show up in your step count: cycling, swimming, rowing, elliptical, yoga.
-            <br />
-            <span className="text-stone-400">Don't include running, jogging, walking, or treadmill — those are already in your steps above. Enter 0 if none.</span>
-          </p>
-        </div>
-        <div>
-          <label className="text-sm font-medium text-stone-700">Job type</label>
-          <div className="space-y-2 mt-2">
-            {[
-              { id: 'desk', label: 'Desk job', sub: 'Mostly seated, computer-based' },
-              { id: 'feet', label: 'On your feet', sub: 'Teacher, retail, healthcare, hospitality' },
-              { id: 'physical', label: 'Highly physical', sub: 'Construction, warehouse, manual labor' },
-            ].map(opt => (
-              <button
-                key={opt.id}
-                onClick={() => setJob(opt.id)}
-                className={`w-full text-left p-3 rounded-lg border transition-colors ${
-                  job === opt.id ? 'border-orange-500 bg-orange-50' : 'border-stone-200 hover:border-orange-500 hover:bg-orange-50'
-                }`}
-              >
-                <div className="font-medium text-stone-900 text-sm">{opt.label}</div>
-                <div className="text-xs text-stone-500">{opt.sub}</div>
-              </button>
-            ))}
-          </div>
-        </div>
+        <HourField label="Wake up" value={wakeH} onChange={setWakeH} icon={Coffee} />
+        {showTrain && <HourField label="Workout" sub="Roughly when you train on a training day" value={trainH} onChange={setTrainH} icon={Dumbbell} />}
+        <HourField label="Sleep" value={sleepH} onChange={setSleepH} icon={Moon} />
       </div>
-
       <PrimaryButton
-        onClick={() => isValid && onContinue({
-          age: ageValue,
-          workouts: parseInt(workouts),
-          cardio: parseInt(cardio),
-          steps: parseInt(steps),
-          job,
-        })}
-        disabled={!isValid}
-        className="mt-6"
-      >
-        Calculate my targets <ArrowRight className="w-4 h-4" />
+        onClick={() => valid && onContinue({ wake: fromHour(wakeH), sleep: fromHour(sleepH), train: showTrain ? fromHour(trainH) : 0 })}
+        disabled={!valid} className="mt-6">
+        See my structure <ArrowRight className="w-4 h-4" />
       </PrimaryButton>
     </Card>
   );
 };
 
-const LoadingScreen = ({ message = 'Calculating your targets...' }) => (
+const LoadingScreen = () => (
   <Card>
     <div className="text-center py-8">
       <Loader2 className="w-10 h-10 mx-auto text-orange-500 animate-spin" />
-      <p className="mt-4 font-medium text-stone-900">{message}</p>
-      <p className="text-sm text-stone-500 mt-1">Running the formula, scaling to your strength profile...</p>
+      <p className="mt-4 font-medium text-stone-900">Structuring your day…</p>
+      <p className="text-sm text-stone-500 mt-1">Choosing your meal count, timing, and macro split…</p>
     </div>
   </Card>
 );
 
-// =====================================================
-// RESULTS SCREEN
-// =====================================================
+// Compute the ordered day events. Placement is RELATIONAL: the last meal floats
+// off SLEEP (a digestion gap before bed), and an evening workout shifts where the
+// big meal lands — after training if it still fits before bed, otherwise before
+// training with a light item after. Depends only on tier + times, so a decoded
+// ID reproduces the same timeline.
+function buildDayEvents(structure, p, meals) {
+  const round15 = (m) => Math.round(m / 15) * 15;
+  const events = [{ t: p.wake, icon: 'wake', label: 'Wake' }];
+  const trains = structure.flags?.workout !== 'none' && p.train > 0;
+  const realMeals = meals.filter((m) => !m.isShake);
+  const shakeMeal = meals.find((m) => m.isShake);
+  const rn = realMeals.length;
 
-const QAItem = ({ question, children }) => {
-  const [open, setOpen] = useState(false);
+  // Wake-anchored continuous timeline (handles past-midnight bedtimes).
+  const wake = p.wake;
+  const w = classifyWorkout(wake, p.sleep, p.train, trains);
+  const cont = (t) => (t < wake ? t + 1440 : t);
+  const sleepC = cont(p.sleep);
+  const trainC = trains ? cont(p.train) : 0;
+
+  // Last meal floats off sleep by default; an evening workout can move it.
+  const sleepAnchored = sleepC - LAST_MEAL_BEFORE_SLEEP;
+  let lastMealTime = sleepAnchored;
+  let priorEnd;
+  let lightAfterWorkout = false;
+
+  if (w.evening) {
+    if (w.fits) {
+      // Big post-workout meal works: last meal ~2.5h after training start, earlier meals before the gym.
+      lastMealTime = trainC + POST_WORKOUT_MEAL_DELAY;
+      priorEnd = trainC - 45;
+    } else {
+      // Too late to eat big after training → keep the largest meal, placed BEFORE
+      // the gym with ~2h to digest, and a light item after.
+      lastMealTime = Math.min(trainC - PRE_WORKOUT_MEAL_GAP, sleepAnchored);
+      priorEnd = lastMealTime - 75;
+      lightAfterWorkout = true;
+    }
+  } else {
+    priorEnd = lastMealTime - 75;
+  }
+
+  // First eating event by morning mode; don't start before a morning workout.
+  let firstMeal = structure.morningMode === 'fasted' ? wake + FIRST_MEAL_AFTER_WAKE_FASTED : wake + FIRST_MEAL_AFTER_WAKE;
+  if (w.morning && trainC >= wake && trainC < firstMeal) firstMeal = Math.max(firstMeal, trainC + 45);
+  // Don't let the first meal start so late that the meals can't fit before the last one.
+  if (rn > 1 && firstMeal > lastMealTime - MIN_INTER_MEAL_GAP * (rn - 1)) {
+    firstMeal = Math.max(wake + 30, lastMealTime - INTER_MEAL_GAP * (rn - 1));
+  }
+
+  // Compute the times of the NON-last meals by spacing FORWARD from the first meal
+  // at a fixed gap — so two meals never crowd together. The last meal stays at its
+  // sleep/workout anchor. If forward-spacing would overrun the last meal, fall back
+  // to an even spread across the available window (still ≥ the hard floor).
+  const mealTimes = [];
+  if (rn === 1) {
+    mealTimes.push(lastMealTime);
+  } else {
+    const forwardLastNonFinal = firstMeal + INTER_MEAL_GAP * (rn - 2); // time of the meal before the last
+    if (forwardLastNonFinal <= lastMealTime - INTER_MEAL_GAP) {
+      // Roomy: fixed-gap spacing from the first meal.
+      for (let i = 0; i < rn - 1; i++) mealTimes.push(firstMeal + INTER_MEAL_GAP * i);
+    } else {
+      // Tight: even spread between first meal and the last meal.
+      for (let i = 0; i < rn - 1; i++) {
+        mealTimes.push(firstMeal + ((lastMealTime - firstMeal) * i) / (rn - 1));
+      }
+    }
+    mealTimes.push(lastMealTime);
+  }
+
+  // Shake placement: pre → just before training; post → after training (bridges
+  // hunger); anchor → a liquid morning feeding near wake.
+  if (shakeMeal) {
+    let st, label;
+    if (shakeMeal.shakeKind === 'post' && trains) {
+      st = trainC + POST_WORKOUT_LIGHT_DELAY;
+      label = `Post-workout shake · ${shakeMeal.kcal} kcal`;
+    } else if (shakeMeal.shakeKind === 'pre' && trains) {
+      st = Math.max(wake + 5, trainC - 15);
+      label = `Pre-workout shake · ${shakeMeal.kcal} kcal`;
+    } else {
+      st = wake + 30;
+      label = `Morning protein shake · ${shakeMeal.kcal} kcal`;
+    }
+    events.push({
+      t: round15(st), icon: 'shake', label,
+      sub: `${shakeMeal.protein}P / ${shakeMeal.carbs}C / ${shakeMeal.fat}F`,
+    });
+  }
+  if (trains) events.push({ t: trainC, icon: 'train', label: 'Workout' });
+
+  realMeals.forEach((m, i) => {
+    events.push({
+      t: round15(mealTimes[i]), icon: 'meal',
+      label: `Meal ${i + 1} · ${m.kcal} kcal`,
+      sub: `${m.protein}P / ${m.carbs}C / ${m.fat}F`,
+    });
+  });
+
+  // Optional light post-workout snack: ONLY when there's no budgeted post-workout
+  // shake already (i.e. the late-evening trainer who isn't especially hungry).
+  const hasPostShake = shakeMeal && shakeMeal.shakeKind === 'post';
+  if (lightAfterWorkout && !hasPostShake) {
+    events.push({ t: round15(trainC + POST_WORKOUT_LIGHT_DELAY), icon: 'snack', label: 'Light snack or shake (optional)', sub: 'if you\'re hungry after training' });
+  }
+
+  events.push({ t: sleepC, icon: 'sleep', label: 'Sleep' });
+
+  // Everything is already in wake-anchored continuous minutes, so a plain sort
+  // orders the day correctly even when bedtime is past midnight. Display maps
+  // back to a real clock via minutesToClock (which mods by 1440).
+  events.sort((a, b) => (a.t - b.t) || (a.icon === 'shake' && b.icon === 'train' ? -1 : b.icon === 'shake' && a.icon === 'train' ? 1 : 0));
+  return events;
+}
+
+// Custom shaker-bottle icon for shakes and the optional light snack (instead of
+// the fork-and-knife, which reads as a full meal).
+const ShakeIcon = ({ className }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M8.5 2h7l-.6 2.5a2 2 0 0 1-.5.9l-.9.9a2 2 0 0 0-.5 1.3V9h-3V7.6a2 2 0 0 0-.5-1.3l-.9-.9a2 2 0 0 1-.5-.9L8.5 2Z" />
+    <path d="M8 9h8a1 1 0 0 1 1 1v9a3 3 0 0 1-3 3h-4a3 3 0 0 1-3-3v-9a1 1 0 0 1 1-1Z" />
+    <path d="M7 13h10" />
+  </svg>
+);
+
+// A compact textual stand-in for the timeline graphic (full SVG arrives in B).
+const TimelinePreview = ({ structure, personalization, meals }) => {
+  const events = buildDayEvents(structure, personalization, meals);
+  const Icon = { wake: Coffee, meal: UtensilsCrossed, train: Dumbbell, sleep: Moon, shake: ShakeIcon, snack: ShakeIcon };
   return (
-    <div className="border border-stone-200 rounded-xl overflow-hidden">
-      <button
-        onClick={() => setOpen(!open)}
-        className="w-full px-5 py-4 flex items-center justify-between text-left hover:bg-stone-50 transition-colors"
-      >
-        <span className="font-medium text-stone-900 text-sm pr-3">{question}</span>
-        {open ? <ChevronUp className="w-4 h-4 text-stone-500 flex-shrink-0" /> : <ChevronDown className="w-4 h-4 text-stone-500 flex-shrink-0" />}
-      </button>
-      {open && (
-        <div className="px-5 pb-4 text-sm text-stone-700 leading-relaxed border-t border-stone-200 pt-3">
-          {children}
+    <div className="bg-stone-50 border border-stone-200 rounded-xl p-5">
+      <div className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-3 flex items-center gap-2"><Clock className="w-3.5 h-3.5" /> Your day (preview — visual timeline coming soon)</div>
+      <div className="space-y-2">
+        {events.map((e, i) => {
+          const I = Icon[e.icon];
+          const isMeal = e.icon === 'meal';
+          const isLight = e.icon === 'shake' || e.icon === 'snack';
+          return (
+            <div key={i} className="flex items-center gap-3 text-sm">
+              <div className="w-16 text-stone-500 tabular-nums">{minutesToClock(e.t)}</div>
+              <div className={`w-7 h-7 rounded-full flex items-center justify-center ${isMeal ? 'bg-orange-100 text-orange-600' : isLight ? 'bg-orange-50 text-orange-500' : 'bg-stone-200 text-stone-600'}`}><I className="w-4 h-4" /></div>
+              <div><div className="font-medium text-stone-900">{e.label}</div>{e.sub && <div className="text-xs text-stone-500">{e.sub}</div>}</div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+const ResultsScreen = ({ code, structure, personalization, plan, templateId, decodedMode, onRestart, onBack }) => {
+  const [copied, setCopied] = useState(false);
+  const isCut = code.direction === 'cut';
+  const tier = isCut ? structure.backloadTier : structure.loadTier;
+  const tierLabel = { light: 'Light backload', moderate: 'Moderate backload', heavy: 'Heavy backload', low: 'Low load', mid: 'Moderate load', high: 'High load' }[tier];
+  const morningLabel = { fasted: 'Fasted morning', light_anchor: 'Light start', even: 'Even meals' }[structure.morningMode];
+  const prose = buildDescription(code, structure, personalization);
+  const restriction = structure.flags?.restriction || ['none'];
+
+  const goToOptiWorkout = () => window.open(`${OPTIWORKOUT_URL}?code=${encodeURIComponent(templateId)}`, '_blank');
+  const copyId = async () => {
+    try { await navigator.clipboard.writeText(templateId); setCopied(true); setTimeout(()=>setCopied(false),2000); } catch {}
+  };
+
+  return (
+    <Card className="max-w-2xl">
+      <BackButton onClick={onBack} />
+      <span className="text-xs font-semibold text-orange-600 tracking-widest uppercase">Your Meal Structure</span>
+      <h2 className="mt-2 text-3xl font-bold text-stone-900">{structure.mealCount} meals · {isCut ? 'cutting' : 'bulking'}</h2>
+      <p className="text-stone-600 mt-2 text-sm">{morningLabel} · {tierLabel} · {code.target} kcal/day</p>
+
+      {decodedMode && (
+        <p className="text-xs text-stone-500 bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 mt-3">
+          Loaded from a MealFrame™ ID. The structure and macros are exact; clock times shown are from the ID. (Body-composition fine-tuning of density only applies on a fresh run.)
+        </p>
+      )}
+
+      {/* Timeline */}
+      <div className="mt-5"><TimelinePreview structure={structure} personalization={personalization} meals={plan.meals} /></div>
+
+      {/* Written prescription */}
+      <div className="mt-5 bg-orange-50 border border-orange-200 rounded-xl p-5">
+        <h3 className="font-semibold text-stone-900 text-sm mb-2">How to run your day</h3>
+        <div className="space-y-2 text-sm text-stone-700 leading-relaxed">
+          {prose.map((line, i) => <p key={i}>{line}</p>)}
+        </div>
+      </div>
+
+      {/* Per-meal breakdown */}
+      <div className="mt-5">
+        <h3 className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-3">Meal-by-meal targets</h3>
+        <div className="space-y-2">
+          {(() => {
+            const realCount = plan.meals.filter((m) => !m.isShake).length;
+            let realIdx = 0;
+            return plan.meals.map((m, i) => {
+              if (m.isShake) {
+                return (
+                  <div key={i} className="bg-orange-50/60 border border-orange-200 rounded-xl p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="font-semibold text-stone-900 flex items-center gap-2">
+                        <ShakeIcon className="w-4 h-4 text-orange-500" />
+                        {m.shakeKind === 'post' ? 'Post-workout shake' : m.shakeKind === 'pre' ? 'Pre-workout shake' : 'Morning protein shake'}
+                      </div>
+                      <div className="text-lg font-bold text-stone-900">{m.kcal} kcal</div>
+                    </div>
+                    <div className="text-sm text-stone-600 mt-1">{m.protein}g protein · {m.carbs}g carbs · {m.fat}g fat</div>
+                    <div className="mt-2 pt-2 border-t border-orange-100 text-xs text-stone-500">
+                      ~{m.protein}g protein powder in water (or a protein smoothie). {m.shakeKind === 'post' ? 'You get hungry after training — this bridges you to your next meal.' : m.shakeKind === 'pre' ? 'Keeps amino acids available through your workout until your first meal.' : 'A quick protein start to the day.'}
+                    </div>
+                  </div>
+                );
+              }
+              const myNum = ++realIdx;
+              const slot = slotNameFor(realIdx - 1, realCount, structure.morningMode);
+              const examples = matchMeals(m, slot, restriction);
+              return (
+                <div key={i} className="bg-white border border-stone-200 rounded-xl p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="font-semibold text-stone-900">Meal {myNum} <span className="text-xs font-normal text-stone-500">· {m.pctOfDay}% of calories</span></div>
+                    <div className="text-lg font-bold text-stone-900">{m.kcal} kcal</div>
+                  </div>
+                  <div className="text-sm text-stone-600 mt-1">{m.protein}g protein · {m.carbs}g carbs · {m.fat}g fat · {m.fiber}g fiber</div>
+                  {m.densityBand && <div className="text-xs text-stone-400 mt-1">Target density: {m.densityBand[0]}–{m.densityBand[1]} kcal/g</div>}
+                  {examples.length > 0 && (
+                    <div className="mt-2 pt-2 border-t border-stone-100 text-xs text-stone-500">
+                      <span className="font-medium text-stone-600">Examples (seed):</span> {examples.map((e)=>`${e.name} (~${e.density} kcal/g)`).join(' · ')}
+                      <div className="text-stone-400 mt-0.5">Scale portions to hit the targets above. Full photo library coming soon.</div>
+                    </div>
+                  )}
+                </div>
+              );
+            });
+          })()}
+        </div>
+      </div>
+
+      {/* Notes from the engine */}
+      {structure.notes && structure.notes.length > 0 && (
+        <div className="mt-4 bg-stone-50 border border-stone-200 rounded-xl p-5">
+          <div className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-2">Why this structure</div>
+          <ul className="space-y-1.5 text-sm text-stone-600">
+            {structure.notes.map((n, i) => <li key={i} className="flex gap-2"><Check className="w-4 h-4 text-orange-500 flex-shrink-0 mt-0.5" /><span>{n}</span></li>)}
+          </ul>
         </div>
       )}
-    </div>
-  );
-};
 
-const ResultsScreen = ({ result, units, onRestart, onBack }) => {
-  const direction = result.direction;
-  const isCut = direction === 'cut';
-  const tierLabel = subBracketTierLabel(result.tier, result.subBracket);
-  const block = compute12WeekRange(result);
-  const mealFrameCode = buildMacroMetricCode(result, units);
-  const [copied, setCopied] = useState(false);
+      {/* Template ID */}
+      <div className="border-t border-stone-200 my-6"></div>
+      <div className="bg-stone-900 rounded-xl p-5 text-center">
+        <h4 className="text-xs font-semibold text-orange-400 uppercase tracking-wider">Your MealFrame™ ID</h4>
+        <p className="text-stone-400 text-xs mt-1">This is your structure. Paste it back into MealFrame anytime to see this page again, and give it to your coach to set up your plan in the ShredSmart app.</p>
+        <div className="mt-3 bg-stone-800 border border-stone-700 rounded-lg px-3 py-3"><code className="text-orange-300 text-xs break-all leading-relaxed">{templateId}</code></div>
+        <button onClick={copyId} className="mt-3 inline-flex items-center gap-2 bg-white text-stone-900 text-sm font-medium py-2 px-4 rounded-full hover:bg-stone-100 transition-colors"><Copy className="w-4 h-4" /> {copied ? 'Copied!' : 'Copy ID'}</button>
+      </div>
 
-  const goToMealFrame = () => {
-    window.open(`${MEALFRAME_URL}?code=${encodeURIComponent(mealFrameCode)}`, '_blank');
-  };
-  const copyCode = async () => {
-    try {
-      await navigator.clipboard.writeText(mealFrameCode);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // clipboard may be unavailable; code is still visible to copy manually
-    }
-  };
-  const archetypeName = ARCHETYPE_NAMES[result.archetypeId] || '';
-
-  // Calorie split for display
-  const proteinKcal = result.protein * 4;
-  const fatKcal = result.fat * 9;
-  const carbsKcal = result.carbs * 4;
-  const totalKcal = proteinKcal + fatKcal + carbsKcal;
-  const proteinPct = Math.round((proteinKcal / totalKcal) * 100);
-  const fatPct = Math.round((fatKcal / totalKcal) * 100);
-  const carbsPct = 100 - proteinPct - fatPct;
-
-  return (
-    <Card className="max-w-2xl">
-      <BackButton onClick={onBack} />
-      <div>
-        <span className="text-xs font-semibold text-orange-600 tracking-widest uppercase">Your Nutrition Targets</span>
-        <h2 className="mt-2 text-3xl font-bold text-stone-900">
-          {isCut ? 'Your cutting plan' : 'Your lean bulk plan'}
-        </h2>
-        <p className="text-stone-600 mt-2 text-sm">
-          For a <strong>{tierLabel}</strong> lifter · {isCut ? 'cutting' : 'lean bulking'}
-          {archetypeName ? <span className="text-stone-400"> · {archetypeName}</span> : null}
-        </p>
-
-        {/* The headline number */}
-        <div className="mt-6 bg-gradient-to-br from-orange-50 to-amber-50 border border-orange-200 rounded-xl p-6">
-          <div className="text-xs font-semibold text-orange-700 uppercase tracking-wider">Daily calorie target</div>
-          <div className="text-5xl font-bold text-stone-900 mt-1">{result.target}</div>
-          <div className="text-sm text-stone-600 mt-1">kcal per day</div>
-
-          <div className="mt-4 pt-4 border-t border-orange-200 grid grid-cols-2 gap-3 text-sm">
-            <div>
-              <div className="text-xs text-stone-500 uppercase tracking-wider">Maintenance</div>
-              <div className="font-semibold text-stone-900">{roundUpTo50(result.maintenance)} kcal</div>
-            </div>
-            <div>
-              <div className="text-xs text-stone-500 uppercase tracking-wider">{isCut ? 'Daily deficit' : 'Daily surplus'}</div>
-              <div className="font-semibold text-stone-900">
-                {isCut ? '−' : '+'}{roundUpTo50(Math.abs(result.maintenance - result.target))} kcal
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Macros */}
-        <div className="mt-5">
-          <h3 className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-3">Daily macros</h3>
-          <div className="space-y-2">
-            <div className="bg-white border border-stone-200 rounded-xl p-4 flex items-center justify-between">
-              <div>
-                <div className="font-semibold text-stone-900">Protein</div>
-                <div className="text-xs text-stone-500">Hit this every day</div>
-              </div>
-              <div className="text-right">
-                <div className="text-2xl font-bold text-stone-900">{result.protein}g</div>
-                <div className="text-xs text-stone-500">{proteinPct}% of calories</div>
-              </div>
-            </div>
-            <div className="bg-white border border-stone-200 rounded-xl p-4 flex items-center justify-between">
-              <div>
-                <div className="font-semibold text-stone-900">Fat</div>
-                <div className="text-xs text-stone-500">Stay above ~60g daily</div>
-              </div>
-              <div className="text-right">
-                <div className="text-2xl font-bold text-stone-900">{result.fat}g</div>
-                <div className="text-xs text-stone-500">{fatPct}% of calories</div>
-              </div>
-            </div>
-            <div className="bg-white border border-stone-200 rounded-xl p-4 flex items-center justify-between">
-              <div>
-                <div className="font-semibold text-stone-900">Carbs</div>
-                <div className="text-xs text-stone-500">
-                  Stay above ~{isCut ? '100g' : '200g'} daily
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="text-2xl font-bold text-stone-900">{result.carbs}g</div>
-                <div className="text-xs text-stone-500">{carbsPct}% of calories</div>
-              </div>
-            </div>
-            <div className="bg-white border border-stone-200 rounded-xl p-4 flex items-center justify-between">
-              <div>
-                <div className="font-semibold text-stone-900">Fiber</div>
-                <div className="text-xs text-stone-500">Minimum — aim for at least this</div>
-              </div>
-              <div className="text-right">
-                <div className="text-2xl font-bold text-stone-900">{result.fiber}g</div>
-                <div className="text-xs text-stone-500">14g per 1,000 kcal</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Target rate of weight change */}
-        <div className="mt-5 bg-stone-50 border border-stone-200 rounded-xl p-5">
-          <div className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Your target rate</div>
-          {isCut ? (
-            <>
-              <div className="text-lg font-bold text-stone-900 mt-1">
-                {formatWeight(result.targetWeeklyLoss, units)} per week
-              </div>
-              <p className="text-sm text-stone-600 mt-2">
-                That's {(result.weeklyRate * 100).toFixed(1)}% of your bodyweight weekly. Write this number down — you'll need it for your weekly check-ins.
-              </p>
-            </>
-          ) : (
-            <>
-              <div className="text-lg font-bold text-stone-900 mt-1">
-                +{formatWeight(result.targetMonthlyGain, units)} per month
-              </div>
-              <p className="text-sm text-stone-600 mt-2">
-                Slow lean bulks build muscle while staying lean. Write this number down — you'll need it for your monthly check-ins.
-              </p>
-            </>
-          )}
-        </div>
-
-        {/* Near-term target leads; ultimate goal stays as the north star */}
-        <div className="mt-4 bg-stone-50 border border-stone-200 rounded-xl p-5">
-          <div className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Your 12-week target weight</div>
-          <div className="text-2xl font-bold text-stone-900 mt-1">{formatWeightRange(block.low, block.high, units)}</div>
-          <p className="text-sm text-stone-600 mt-2">
-            This is where this block takes you — your job for the next 12 weeks. You're ultimately heading for your goal physique weight of <strong>{formatWeightRange(result.goalLow, result.goalHigh, units)}</strong> (your north star from PhysiquePlan™), but for now, aim here.
-          </p>
-        </div>
-
-        {/* Reminder of the principle */}
-        <div className="mt-4 bg-orange-50 border border-orange-200 rounded-xl p-5">
-          <h3 className="font-semibold text-stone-900 text-sm">Remember the system:</h3>
-          <p className="text-sm text-stone-700 mt-2 leading-relaxed">
-            Hit your calories and protein every day. Fat and carbs can fluctuate — just keep them above the floors. That's it.
-          </p>
-        </div>
-
-        {/* Q&A */}
-        <div className="mt-6">
-          <h3 className="font-semibold text-stone-900 mb-3">Common questions</h3>
-          <div className="space-y-2">
-            <QAItem question="What's more important — hitting protein or calories?">
-              <p>Protein is more important because it helps prevent muscle loss. Rebuilding lost muscle takes more time than you save by holding the deficit.</p>
-              <p className="mt-2"><strong>If your protein is below 90% of target:</strong> eat more protein even if it reduces your deficit for the day.</p>
-              <p className="mt-2"><strong>If protein is above 90% of target:</strong> hold the full deficit. Lower protein days once in a while aren't a big deal.</p>
-            </QAItem>
-            <QAItem question="Can I have higher-calorie and lower-calorie days?">
-              <p>It's better to keep your daily calorie intake constant — even on training days vs rest days. The benefit of getting used to a steady diet structure (better hunger signals, ingrained habits, predictability) outweighs any small benefits of cycling.</p>
-              <p className="mt-2">Eat the same every day. It's easier and it works better.</p>
-            </QAItem>
-            {isCut ? (
-              <QAItem question="What if I want to cut faster?">
-                <p>Don't. Deficits larger than what you're prescribed lead to muscle loss, can't be maintained long-term, and don't help you build the habits that keep you lean afterward.</p>
-                <p className="mt-2">The time you save with an aggressive cut gets repaid with interest later — through rebuilding muscle, binges, or yo-yo dieting. Stick to the program.</p>
-              </QAItem>
-            ) : (
-              <QAItem question="What if I want to bulk faster?">
-                <p>Don't. A bigger surplus doesn't build muscle faster — muscle growth has a speed limit set by your training and recovery, not by how much you eat. Past that limit, every extra calorie just becomes fat.</p>
-                <p className="mt-2">That fat is fat you'll have to cut off later, which costs you time and muscle. A slow, lean bulk gets you to the goal physique faster than a fast, sloppy one. Stick to the program.</p>
-              </QAItem>
-            )}
-            <QAItem question="Why isn't my protein higher?">
-              <p>MacroMetric sets protein based on your actual muscle development and lean mass — your true needs. Most calculators set protein based on bodyweight, which severely overestimates the requirements of anyone carrying a moderate amount of body fat.</p>
-              <p className="mt-2">ShredSmart sets protein squarely in the optimal range, but intentionally on the medium-to-lower end. Going higher would mean less fat and carbs, which hurts hormonal balance, sleep, training, and meal variety.</p>
-              <p className="mt-2">You can go a bit above your prescribed number if your diet preferences favor it — but don't go significantly higher when cutting. Trust the number — it's set this way deliberately, and it's good for you.</p>
-            </QAItem>
-            <QAItem question="Should I eat back the calories I burn through exercise?">
-              <p>Only if the activity isn't already captured in your maintenance calculation.</p>
-              <p className="mt-2"><strong>Don't eat them back</strong> for your normal workouts and cardio. Those are already built into your maintenance number — you told MacroMetric about them when you set up your plan. Eating them back would double-count.</p>
-              <p className="mt-2"><strong>Do eat them back</strong> for non-routine activity. If you go on a long hike and burn an extra 1000 kcal, eat those 1000 kcal more that day. Same goes for an extra workout, an extra cardio session, or a full day of physical work you don't normally do.</p>
-            </QAItem>
-            <QAItem question="If I overeat one day, should I eat less the next day to make up for it?">
-              <p>No. Return to your normal target as if nothing happened.</p>
-              <p className="mt-2">Cutting calories the day after an overeat seems logical but creates two problems. First, it makes the plan feel harder — you've turned one bad day into two punishing days. Second, and more importantly, once you allow yourself to "borrow from tomorrow," you'll overeat more often today. Research is clear on this: people who believe they can compensate later are dramatically more likely to indulge now.</p>
-              <p className="mt-2">Let the mistake be a mistake. Feel the sting of it. Then return to the normal plan tomorrow. Maintaining a constant daily target is what builds the habits, satiety signals, and consistency that actually keep you lean long-term.</p>
-            </QAItem>
-            <QAItem question="What if I don't hit my macros to the gram?">
-              <p>You don't need to. Hitting calories and protein within a few grams of target produces results indistinguishable from hitting each macro perfectly — as long as fat and carbs stay above their floors.</p>
-              <p className="mt-2">Fat at 25% of calories one day and 40% the next is totally fine. Don't make this harder than it needs to be.</p>
-            </QAItem>
-            <QAItem question="Why is fiber on here, and how much do I need?">
-              <p>Fiber isn't a macronutrient, but it's one of the most useful things you can prioritize on a cut — which is why it's on your numbers. Aim for at least <strong>14g per 1,000 calories</strong> you eat. Treat it as a floor, not a ceiling.</p>
-              <p className="mt-2">High-fiber foods make a deficit far easier to live with. They require more chewing, which stretches out your meals and makes them feel bigger. Fiber also slows digestion and nutrient absorption, which delays hunger between meals — so you stay full longer on fewer calories.</p>
-              <p className="mt-2">It also keeps you regular. Constipation is common on a high-protein diet with reduced calories, and adequate fiber prevents it. Build most of your meals around vegetables or other high-fiber foods — legumes, fruit, whole grains, mushrooms.</p>
-            </QAItem>
-            <QAItem question="Why do I need to update my numbers as I progress?">
-              {isCut ? (
-                <p>As you cut, your body adapts. Maintenance drops, NEAT decreases, and your body becomes more efficient at the lower weight. The initial calorie target won't stay accurate forever.</p>
-              ) : (
-                <p>As you gain weight, your maintenance rises — more bodyweight simply costs more calories to carry around. That means the surplus you started with slowly shrinks, and if you don't bump your intake your gains will stall. The initial calorie target won't stay accurate forever.</p>
-              )}
-              <p className="mt-2">{isCut ? 'Check in weekly with MacroMetric to keep your numbers calibrated.' : 'Check in monthly with MacroMetric to keep your numbers calibrated.'}</p>
-            </QAItem>
-          </div>
-        </div>
-
-        {/* CTAs */}
-        <div className="border-t border-stone-200 my-6"></div>
-
-        {/* MealFrame code — paste fallback, mirrors PhysiquePlan's handoff */}
-        <div className="bg-stone-900 rounded-xl p-5 text-center">
-          <h4 className="text-xs font-semibold text-orange-400 uppercase tracking-wider">Your MacroMetric™ Code</h4>
-          <p className="text-stone-400 text-xs mt-1">MealFrame™ uses this to pick up your targets — no re-entering numbers. Keep it for your check-ins, too.</p>
-          <div className="mt-3 bg-stone-800 border border-stone-700 rounded-lg px-3 py-3">
-            <code className="text-orange-300 text-xs break-all leading-relaxed">{mealFrameCode}</code>
-          </div>
-          <button
-            onClick={copyCode}
-            className="mt-3 inline-flex items-center gap-2 bg-white text-stone-900 text-sm font-medium py-2 px-4 rounded-full hover:bg-stone-100 transition-colors"
-          >
-            <Copy className="w-4 h-4" /> {copied ? 'Copied!' : 'Copy code'}
-          </button>
-        </div>
-
+      {!decodedMode && (
         <div className="text-center mt-6">
           <h3 className="text-xl font-bold text-stone-900">What's next?</h3>
-          <p className="text-stone-600 mt-2 text-sm leading-relaxed">
-            Continue to <strong>MealFrame™</strong> to turn these numbers into a meal structure that fits your life.
-          </p>
-          <div className="space-y-2 mt-5">
-            <PrimaryButton onClick={goToMealFrame}>
-              Continue to MealFrame™ <ArrowRight className="w-4 h-4" />
-            </PrimaryButton>
-          </div>
-
-          <button onClick={onRestart} className="text-xs text-stone-500 hover:text-stone-700 mt-4 underline underline-offset-2">
-            Start over with a new code
-          </button>
+          <p className="text-stone-600 mt-2 text-sm leading-relaxed">Continue to <strong>OptiWorkout™</strong> to get the training program that pairs with your plan.</p>
+          <div className="mt-5"><PrimaryButton onClick={goToOptiWorkout}>Continue to OptiWorkout™ <ArrowRight className="w-4 h-4" /></PrimaryButton></div>
         </div>
-      </div>
+      )}
+      <button onClick={onRestart} className="block mx-auto text-xs text-stone-500 hover:text-stone-700 mt-4 underline underline-offset-2">Start over</button>
     </Card>
   );
 };
 
-// =====================================================
-// CHECK-IN: paste your MM1 code (primary entry)
-// Ingesting the MM1 code is what lets the check-in emit a COMPLETE MM1 code at
-// the end (it recovers tier/subBracket/height/maintenance) and pre-fills the
-// form. Manual entry stays available as a fallback, but can't produce a code.
-// =====================================================
-
-const CheckInCodeScreen = ({ onDecoded, onManual, onBack }) => {
-  const [code, setCode] = useState('');
+// ID decoder entry screen
+const ID_ERROR_COPY = {
+  empty: 'Paste your MealFrame™ ID to continue.',
+  format: 'That doesn\'t look like a MealFrame™ ID. It should start with “MF1-”.',
+  wrongcode: 'That\'s a PhysiquePlan™ or MacroMetric™ code, not a MealFrame™ ID. To build a structure, use “Build my meal structure” on the home screen.',
+  corrupt: 'That ID couldn\'t be read. Copy it again.',
+  checksum: 'That ID doesn\'t look right — a character may be off. Copy it again.',
+  fields: 'That ID is incomplete. Copy the full ID.',
+};
+const DecodeIdScreen = ({ onDecoded, onBack }) => {
+  const [id, setId] = useState('');
   const [error, setError] = useState(null);
-
   const submit = () => {
-    const res = decodeMacroMetricCode(code);
-    if (!res.ok) {
-      setError(res.error);
-      return;
-    }
+    const res = decodeTemplateId(id);
+    if (!res.ok) { setError(res.error); return; }
     onDecoded(res.data);
   };
-
   return (
     <Card>
       <BackButton onClick={onBack} />
-      <div>
-        <span className="text-xs font-semibold text-stone-400 tracking-widest uppercase">Check-in</span>
-        <h2 className="mt-2 text-2xl font-bold text-stone-900">Paste your MacroMetric™ code</h2>
-        <p className="text-stone-600 mt-2 text-sm">
-          Use the code from the end of your plan — or from your last check-in. MacroMetric pre-fills your current numbers, so you only enter this period's measurements. If your targets change, you'll get a fresh code to take to MealFrame™.
-        </p>
-
-        <div className="mt-5">
-          <label className="text-sm font-medium text-stone-700">Your MacroMetric™ code</label>
-          <input
-            type="text"
-            value={code}
-            onChange={(e) => { setCode(e.target.value); if (error) setError(null); }}
-            placeholder="MM1-…"
-            spellCheck={false}
-            autoCapitalize="off"
-            autoCorrect="off"
-            className="mt-1 w-full px-4 py-3 rounded-lg border border-stone-200 bg-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500"
-          />
-          {error && (
-            <p className="text-sm text-red-600 mt-2 leading-relaxed">{MM_CODE_ERROR_COPY[error] || MM_CODE_ERROR_COPY.format}</p>
-          )}
-        </div>
-
-        <PrimaryButton onClick={submit} disabled={!code.trim()} className="mt-5">
-          Load my numbers <ArrowRight className="w-4 h-4" />
-        </PrimaryButton>
-
-        <SecondaryButton onClick={onManual} className="mt-2 text-sm">
-          I don't have my code — enter manually
-        </SecondaryButton>
-        <p className="text-xs text-stone-500 text-center mt-3">
-          Manual check-ins still work — they just can't generate a MealFrame™ code.
-        </p>
+      <span className="text-xs font-semibold text-stone-400 tracking-widest uppercase">Reload a structure</span>
+      <h2 className="mt-2 text-2xl font-bold text-stone-900">Paste your MealFrame™ ID</h2>
+      <p className="text-stone-600 mt-2 text-sm">Have an ID from a previous run (or a client's)? Paste it to regenerate the full structure, timeline, and meal targets — no questionnaire needed.</p>
+      <div className="mt-5">
+        <input type="text" value={id} onChange={(e)=>{setId(e.target.value); if(error)setError(null);}} placeholder="MF1-…" spellCheck={false} autoCapitalize="off" autoCorrect="off"
+          className="w-full px-4 py-3 rounded-lg border border-stone-200 bg-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500" />
+        {error && <p className="text-sm text-red-600 mt-2 leading-relaxed">{ID_ERROR_COPY[error] || ID_ERROR_COPY.format}</p>}
       </div>
-    </Card>
-  );
-};
-
-// =====================================================
-// CHECK-IN: cut/bulk selection (manual fallback only — the code carries direction)
-// =====================================================
-
-const CheckInRouterScreen = ({ onSelect, onBack }) => (
-  <Card>
-    <BackButton onClick={onBack} />
-    <div>
-      <span className="text-xs font-semibold text-stone-400 tracking-widest uppercase">Check-in</span>
-      <h2 className="mt-2 text-2xl font-bold text-stone-900">Are you cutting or bulking?</h2>
-      <p className="text-stone-600 mt-2 text-sm">
-        The check-in is different for each. Cutting is weekly because fat loss is fast and loud. Bulking is monthly because muscle gain is slow and quiet.
-      </p>
-
-      <div className="space-y-2 mt-6">
-        <button
-          onClick={() => onSelect('cut')}
-          className="w-full text-left p-5 rounded-xl border border-stone-200 hover:border-orange-500 hover:bg-orange-50 transition-colors"
-        >
-          <div className="font-semibold text-stone-900">Cutting</div>
-          <div className="text-xs text-stone-500 mt-0.5">Weekly check-in with two-week trend math</div>
-        </button>
-        <button
-          onClick={() => onSelect('bulk')}
-          className="w-full text-left p-5 rounded-xl border border-stone-200 hover:border-orange-500 hover:bg-orange-50 transition-colors"
-        >
-          <div className="font-semibold text-stone-900">Lean bulking</div>
-          <div className="text-xs text-stone-500 mt-0.5">Monthly check-in based on weight + strength</div>
-        </button>
-      </div>
-    </div>
-  </Card>
-);
-
-// Units selector — only needed for the manual check-in fallback (no code there).
-const UnitsScreen = ({ onSelect, onBack }) => (
-  <Card>
-    <BackButton onClick={onBack} />
-    <div className="text-center">
-      <span className="text-xs font-semibold text-stone-400 tracking-widest uppercase">First — your preferred units</span>
-      <h2 className="mt-3 text-2xl font-bold text-stone-900">Metric or Imperial?</h2>
-      <p className="text-stone-600 mt-2 text-sm">All your inputs and results will be shown in this format.</p>
-      <div className="space-y-2 mt-6">
-        <button
-          onClick={() => onSelect('metric')}
-          className="w-full text-left p-5 rounded-xl border border-stone-200 hover:border-orange-500 hover:bg-orange-50 transition-colors"
-        >
-          <div className="font-semibold text-stone-900">Metric</div>
-          <div className="text-xs text-stone-500 mt-0.5">Centimeters, kilograms</div>
-        </button>
-        <button
-          onClick={() => onSelect('imperial')}
-          className="w-full text-left p-5 rounded-xl border border-stone-200 hover:border-orange-500 hover:bg-orange-50 transition-colors"
-        >
-          <div className="font-semibold text-stone-900">Imperial</div>
-          <div className="text-xs text-stone-500 mt-0.5">Feet/inches, pounds</div>
-        </button>
-      </div>
-    </div>
-  </Card>
-);
-
-// =====================================================
-// CUTTING CHECK-IN  (logic untouched — never read archetype)
-// `prefill` (optional) seeds the fields we can recover from the ingested MM1
-// code: current target, protein, height, and the target rate (recomputed from
-// tier/subBracket/weight/height). All editable.
-// =====================================================
-
-const CuttingCheckInScreen = ({ onSubmit, units, onBack, prefill = {} }) => {
-  const [tracked, setTracked] = useState(null);
-  const [currentTarget, setCurrentTarget] = useState(prefill.currentTarget || '');
-  const [actualIntake, setActualIntake] = useState('');
-  const [bwTwoWeeksAgo, setBwTwoWeeksAgo] = useState('');
-  const [bwThisWeek, setBwThisWeek] = useState('');
-  const [targetRate, setTargetRate] = useState(prefill.targetRate || '');
-  const [height, setHeight] = useState(prefill.height || '');
-  const [proteinTarget, setProteinTarget] = useState(prefill.proteinTarget || '');
-
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const [waist2w, setWaist2w] = useState('');
-  const [waistNow, setWaistNow] = useState('');
-  const [strengthUp, setStrengthUp] = useState(null);
-
-  const isPrefilled = !!prefill.currentTarget;
-
-  const unitW = units === 'metric' ? 'kg' : 'lb';
-  const unitH = units === 'metric' ? 'cm' : 'in';
-  const unitWaist = units === 'metric' ? 'cm' : 'in';
-
-  const isValid =
-    tracked !== null &&
-    currentTarget && parseInt(currentTarget) > 800 &&
-    actualIntake && parseInt(actualIntake) > 500 &&
-    bwTwoWeeksAgo && parseFloat(bwTwoWeeksAgo) > 30 &&
-    bwThisWeek && parseFloat(bwThisWeek) > 30 &&
-    targetRate && parseFloat(targetRate) > 0 &&
-    height && parseFloat(height) > 100 &&
-    proteinTarget && parseInt(proteinTarget) > 30;
-
-  const handleSubmit = () => {
-    if (!isValid) return;
-    onSubmit({
-      tracked,
-      currentTarget: parseInt(currentTarget),
-      actualIntake: parseInt(actualIntake),
-      bwTwoWeeksAgo: units === 'metric' ? parseFloat(bwTwoWeeksAgo) : lbToKg(parseFloat(bwTwoWeeksAgo)),
-      bwThisWeek: units === 'metric' ? parseFloat(bwThisWeek) : lbToKg(parseFloat(bwThisWeek)),
-      targetRate: units === 'metric' ? parseFloat(targetRate) : lbToKg(parseFloat(targetRate)),
-      height: units === 'metric' ? parseFloat(height) : parseFloat(height) * 2.54,
-      proteinTarget: parseInt(proteinTarget),
-      waist2w: waist2w ? (units === 'metric' ? parseFloat(waist2w) : parseFloat(waist2w) * 2.54) : null,
-      waistNow: waistNow ? (units === 'metric' ? parseFloat(waistNow) : parseFloat(waistNow) * 2.54) : null,
-      strengthUp,
-    });
-  };
-
-  return (
-    <Card>
-      <BackButton onClick={onBack} />
-      <div>
-        <span className="text-xs font-semibold text-stone-400 tracking-widest uppercase">Weekly check-in</span>
-        <h2 className="mt-2 text-2xl font-bold text-stone-900">Cutting check-in</h2>
-        <p className="text-stone-600 mt-2 text-sm">
-          Tell MacroMetric how your last two weeks went. We'll use the trend to decide if your numbers need adjusting.
-        </p>
-
-        {isPrefilled && (
-          <p className="text-xs text-orange-700 bg-orange-50 border border-orange-200 rounded-lg px-3 py-2 mt-3">
-            Pre-filled from your MacroMetric™ code — just add this period's numbers below (edit anything that's changed).
-          </p>
-        )}
-
-        <div className="space-y-4 mt-5">
-          <div>
-            <label className="text-sm font-medium text-stone-700">Did you track your intake accurately last week?</label>
-            <div className="grid grid-cols-2 gap-2 mt-2">
-              {[{ v: true, l: 'Yes' }, { v: false, l: 'No' }].map((opt) => (
-                <button
-                  key={opt.l}
-                  onClick={() => setTracked(opt.v)}
-                  className={`p-3 rounded-lg border transition-colors ${
-                    tracked === opt.v ? 'border-orange-500 bg-orange-50' : 'border-stone-200 hover:border-orange-500 hover:bg-orange-50'
-                  }`}
-                >
-                  <span className="font-medium text-stone-900 text-sm">{opt.l}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className="text-sm font-medium text-stone-700">Your current daily calorie target (kcal)</label>
-            <input
-              type="number"
-              value={currentTarget}
-              onChange={(e) => setCurrentTarget(e.target.value)}
-              placeholder="e.g. 2400"
-              className="mt-1 w-full px-4 py-3 rounded-lg border border-stone-200 bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500"
-            />
-          </div>
-
-          <div>
-            <label className="text-sm font-medium text-stone-700">Your current protein target (g)</label>
-            <input
-              type="number"
-              value={proteinTarget}
-              onChange={(e) => setProteinTarget(e.target.value)}
-              placeholder="e.g. 165"
-              className="mt-1 w-full px-4 py-3 rounded-lg border border-stone-200 bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500"
-            />
-          </div>
-
-          <div>
-            <label className="text-sm font-medium text-stone-700">Your average daily intake last week (kcal)</label>
-            <input
-              type="number"
-              value={actualIntake}
-              onChange={(e) => setActualIntake(e.target.value)}
-              placeholder="e.g. 2380"
-              className="mt-1 w-full px-4 py-3 rounded-lg border border-stone-200 bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500"
-            />
-          </div>
-
-          <div>
-            <label className="text-sm font-medium text-stone-700">Average bodyweight 2 weeks ago ({unitW})</label>
-            <input
-              type="number"
-              step="0.1"
-              value={bwTwoWeeksAgo}
-              onChange={(e) => setBwTwoWeeksAgo(e.target.value)}
-              placeholder={units === 'metric' ? 'e.g. 84.5' : 'e.g. 186.0'}
-              className="mt-1 w-full px-4 py-3 rounded-lg border border-stone-200 bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500"
-            />
-          </div>
-
-          <div>
-            <label className="text-sm font-medium text-stone-700">Average bodyweight this week ({unitW})</label>
-            <input
-              type="number"
-              step="0.1"
-              value={bwThisWeek}
-              onChange={(e) => setBwThisWeek(e.target.value)}
-              placeholder={units === 'metric' ? 'e.g. 83.6' : 'e.g. 184.2'}
-              className="mt-1 w-full px-4 py-3 rounded-lg border border-stone-200 bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500"
-            />
-          </div>
-
-          <div>
-            <label className="text-sm font-medium text-stone-700">Your target weekly weight loss ({unitW}/week)</label>
-            <input
-              type="number"
-              step="0.1"
-              value={targetRate}
-              onChange={(e) => setTargetRate(e.target.value)}
-              placeholder={units === 'metric' ? 'e.g. 0.5' : 'e.g. 1.1'}
-              className="mt-1 w-full px-4 py-3 rounded-lg border border-stone-200 bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500"
-            />
-            <p className="text-xs text-stone-500 mt-1">From your original MacroMetric plan</p>
-          </div>
-
-          <div>
-            <label className="text-sm font-medium text-stone-700">Your height ({unitH})</label>
-            <input
-              type="number"
-              value={height}
-              onChange={(e) => setHeight(e.target.value)}
-              placeholder={units === 'metric' ? 'e.g. 180' : 'e.g. 71'}
-              className="mt-1 w-full px-4 py-3 rounded-lg border border-stone-200 bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500"
-            />
-          </div>
-
-          {/* Advanced inputs */}
-          <div className="border-t border-stone-200 pt-4">
-            <button
-              onClick={() => setShowAdvanced(!showAdvanced)}
-              className="w-full flex items-center justify-between text-left"
-            >
-              <div>
-                <div className="font-medium text-stone-900 text-sm">Help MacroMetric be more accurate</div>
-                <div className="text-xs text-stone-500 mt-0.5">Unlock recomp detection — prevents being told to cut harder when you're already winning</div>
-              </div>
-              {showAdvanced ? <ChevronUp className="w-4 h-4 text-stone-500" /> : <ChevronDown className="w-4 h-4 text-stone-500" />}
-            </button>
-
-            {showAdvanced && (
-              <div className="space-y-4 mt-4 pl-3 border-l-2 border-orange-200">
-                <div>
-                  <label className="text-sm font-medium text-stone-700">Waist 2 weeks ago ({unitWaist})</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={waist2w}
-                    onChange={(e) => setWaist2w(e.target.value)}
-                    placeholder={units === 'metric' ? 'e.g. 85.0' : 'e.g. 33.5'}
-                    className="mt-1 w-full px-4 py-3 rounded-lg border border-stone-200 bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-stone-700">Waist this week ({unitWaist})</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={waistNow}
-                    onChange={(e) => setWaistNow(e.target.value)}
-                    placeholder={units === 'metric' ? 'e.g. 84.0' : 'e.g. 33.0'}
-                    className="mt-1 w-full px-4 py-3 rounded-lg border border-stone-200 bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-stone-700">Is your strength going up?</label>
-                  <p className="text-xs text-stone-500 mt-0.5">More reps or load on most lifts compared to 2 weeks ago</p>
-                  <div className="grid grid-cols-2 gap-2 mt-2">
-                    {[{ v: true, l: 'Yes' }, { v: false, l: 'No' }].map((opt) => (
-                      <button
-                        key={opt.l}
-                        onClick={() => setStrengthUp(opt.v)}
-                        className={`p-3 rounded-lg border transition-colors ${
-                          strengthUp === opt.v ? 'border-orange-500 bg-orange-50' : 'border-stone-200 hover:border-orange-500 hover:bg-orange-50'
-                        }`}
-                      >
-                        <span className="font-medium text-stone-900 text-sm">{opt.l}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <PrimaryButton onClick={handleSubmit} disabled={!isValid} className="mt-6">
-          Run my check-in <ArrowRight className="w-4 h-4" />
-        </PrimaryButton>
-      </div>
-    </Card>
-  );
-};
-
-// =====================================================
-// CUTTING CHECK-IN LOGIC  (unchanged)
-// =====================================================
-
-function processCuttingCheckIn(input, units = 'metric') {
-  const wUnit = units === 'imperial' ? 'lb' : 'kg';
-  const fmt = (kg) => units === 'imperial' ? kgToLb(kg).toFixed(2) : kg.toFixed(2);
-
-  // Step 1: Accuracy gate
-  if (input.tracked === false) {
-    return {
-      verdict: 'no_change',
-      reason: 'accuracy',
-      message: "We can't adjust without clean data. Track every meal this week with the same care you would when prepping for a photoshoot, then come back. The whole system depends on knowing what you actually ate.",
-      newTarget: input.currentTarget,
-      newProtein: input.proteinTarget,
-    };
-  }
-
-  // Step 2: Calculate trend
-  const weightChange = input.bwTwoWeeksAgo - input.bwThisWeek;
-  const actualRate = weightChange / 2;
-  const gap = input.targetRate - actualRate;
-
-  // Step 3: Tolerance check
-  const tolerance = 0.25 * input.targetRate;
-  if (Math.abs(gap) <= tolerance) {
-    return {
-      verdict: 'no_change',
-      reason: 'on_track',
-      message: "You're on track. No change. Keep going.",
-      detail: `You lost ${fmt(actualRate)} ${wUnit}/week vs your target of ${fmt(input.targetRate)} ${wUnit}/week. That's right in the zone.`,
-      newTarget: input.currentTarget,
-      newProtein: input.proteinTarget,
-      actualRate,
-      gap,
-    };
-  }
-
-  // Step 4: Body recomp check (only if optional data provided AND losing slower)
-  if (
-    actualRate < input.targetRate &&
-    input.waist2w !== null && input.waistNow !== null && input.strengthUp !== null
-  ) {
-    const waistChange = input.waist2w - input.waistNow;
-    const weeklyWaistLoss = waistChange / 2;
-    const recompThreshold = 0.75 * input.targetRate;
-
-    if (weeklyWaistLoss >= recompThreshold && input.strengthUp === true) {
-      return {
-        verdict: 'no_change',
-        reason: 'recomp',
-        message: "Your scale isn't moving as fast as planned — but your waist is shrinking and your strength is rising. This is body recomposition: the best possible outcome of a cut.",
-        detail: `You're losing fat and gaining muscle at the same time. The scale doesn't show it because muscle replaces some of the lost fat. Don't change a thing.`,
-        newTarget: input.currentTarget,
-        newProtein: input.proteinTarget,
-        actualRate,
-        gap,
-      };
-    }
-  }
-
-  // Step 5: Calculate adjustment
-  const rawAdjustment = (gap * 7700) / 7;
-  const halfAdjustment = rawAdjustment / 2;
-  const cappedAdjustment = Math.min(Math.abs(halfAdjustment), 150) * Math.sign(halfAdjustment);
-
-  let newTarget;
-  let adjustmentDirection;
-  if (actualRate < input.targetRate) {
-    // losing too slow → eat less
-    newTarget = input.currentTarget - cappedAdjustment;
-    adjustmentDirection = 'down';
-  } else {
-    // losing too fast → eat more
-    newTarget = input.currentTarget + Math.abs(cappedAdjustment);
-    adjustmentDirection = 'up';
-  }
-
-  newTarget = roundUpTo50(newTarget);
-
-  // Step 6: Apply floor
-  const floor = input.height > 175 ? 2000 : 1800;
-  let floorApplied = false;
-  if (newTarget < floor) {
-    newTarget = floor;
-    floorApplied = true;
-  }
-
-  // Recalculate macros
-  const newFat = roundToNearest5((newTarget * 0.35) / 9);
-  const newCarbs = calculateCarbs(newTarget, input.proteinTarget, newFat);
-
-  let message, detail;
-  if (adjustmentDirection === 'down') {
-    message = `You're losing slower than planned. Reducing your target by ${Math.abs(Math.round(cappedAdjustment))} kcal/day.`;
-    detail = `You lost ${fmt(actualRate)} ${wUnit}/week vs your target of ${fmt(input.targetRate)} ${wUnit}/week. We're easing into the adjustment — half of what the math suggests, capped at 150 kcal. Don't expect overnight changes; cuts work over weeks, not days.`;
-  } else {
-    message = `You're losing faster than planned. Bumping your target up by ${Math.round(Math.abs(cappedAdjustment))} kcal/day.`;
-    detail = `You lost ${fmt(actualRate)} ${wUnit}/week vs your target of ${fmt(input.targetRate)} ${wUnit}/week. Aggressive cuts cost muscle — let's slow it down.`;
-  }
-
-  if (floorApplied) {
-    detail += ` Note: we hit the ${floor} kcal floor that protects sanity and hormones. Going below isn't worth it.`;
-  }
-
-  return {
-    verdict: 'change',
-    reason: adjustmentDirection,
-    message,
-    detail,
-    newTarget,
-    newProtein: input.proteinTarget,
-    newFat,
-    newCarbs,
-    actualRate,
-    gap,
-    adjustmentAmount: Math.round(Math.abs(cappedAdjustment)),
-  };
-}
-
-// =====================================================
-// BULKING CHECK-IN  (logic untouched — never read archetype)
-// `prefill` (optional) seeds current target, protein, and target monthly gain
-// (recomputed from tier/subBracket/weight). All editable.
-// =====================================================
-
-const BulkingCheckInScreen = ({ onSubmit, units, onBack, prefill = {} }) => {
-  const [currentTarget, setCurrentTarget] = useState(prefill.currentTarget || '');
-  const [proteinTarget, setProteinTarget] = useState(prefill.proteinTarget || '');
-  const [bwLastMonth, setBwLastMonth] = useState('');
-  const [bwThisMonth, setBwThisMonth] = useState('');
-  const [targetMonthlyGain, setTargetMonthlyGain] = useState(prefill.targetMonthlyGain || '');
-  const [strengthUp, setStrengthUp] = useState(null);
-
-  const isPrefilled = !!prefill.currentTarget;
-
-  const unitW = units === 'metric' ? 'kg' : 'lb';
-
-  const isValid =
-    currentTarget && parseInt(currentTarget) > 800 &&
-    proteinTarget && parseInt(proteinTarget) > 30 &&
-    bwLastMonth && parseFloat(bwLastMonth) > 30 &&
-    bwThisMonth && parseFloat(bwThisMonth) > 30 &&
-    targetMonthlyGain && parseFloat(targetMonthlyGain) > 0 &&
-    strengthUp !== null;
-
-  const handleSubmit = () => {
-    if (!isValid) return;
-    onSubmit({
-      currentTarget: parseInt(currentTarget),
-      proteinTarget: parseInt(proteinTarget),
-      bwLastMonth: units === 'metric' ? parseFloat(bwLastMonth) : lbToKg(parseFloat(bwLastMonth)),
-      bwThisMonth: units === 'metric' ? parseFloat(bwThisMonth) : lbToKg(parseFloat(bwThisMonth)),
-      targetMonthlyGain: units === 'metric' ? parseFloat(targetMonthlyGain) : lbToKg(parseFloat(targetMonthlyGain)),
-      strengthUp,
-    });
-  };
-
-  return (
-    <Card>
-      <BackButton onClick={onBack} />
-      <div>
-        <span className="text-xs font-semibold text-stone-400 tracking-widest uppercase">Monthly check-in</span>
-        <h2 className="mt-2 text-2xl font-bold text-stone-900">Bulking check-in</h2>
-        <p className="text-stone-600 mt-2 text-sm">
-          Bulking moves slowly. We check monthly because weekly bulking signals are too noisy to act on. We don't need precise calorie tracking — your weight and strength tell us what we need to know.
-        </p>
-
-        {isPrefilled && (
-          <p className="text-xs text-orange-700 bg-orange-50 border border-orange-200 rounded-lg px-3 py-2 mt-3">
-            Pre-filled from your MacroMetric™ code — just add this month's numbers below (edit anything that's changed).
-          </p>
-        )}
-
-        <div className="space-y-4 mt-5">
-          <div>
-            <label className="text-sm font-medium text-stone-700">Your current daily calorie target (kcal)</label>
-            <input
-              type="number"
-              value={currentTarget}
-              onChange={(e) => setCurrentTarget(e.target.value)}
-              placeholder="e.g. 3000"
-              className="mt-1 w-full px-4 py-3 rounded-lg border border-stone-200 bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500"
-            />
-          </div>
-
-          <div>
-            <label className="text-sm font-medium text-stone-700">Your current protein target (g)</label>
-            <input
-              type="number"
-              value={proteinTarget}
-              onChange={(e) => setProteinTarget(e.target.value)}
-              placeholder="e.g. 135"
-              className="mt-1 w-full px-4 py-3 rounded-lg border border-stone-200 bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500"
-            />
-          </div>
-
-          <div>
-            <label className="text-sm font-medium text-stone-700">Average bodyweight last month ({unitW})</label>
-            <input
-              type="number"
-              step="0.1"
-              value={bwLastMonth}
-              onChange={(e) => setBwLastMonth(e.target.value)}
-              placeholder={units === 'metric' ? 'e.g. 75.0' : 'e.g. 165.3'}
-              className="mt-1 w-full px-4 py-3 rounded-lg border border-stone-200 bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500"
-            />
-          </div>
-
-          <div>
-            <label className="text-sm font-medium text-stone-700">Average bodyweight this month ({unitW})</label>
-            <input
-              type="number"
-              step="0.1"
-              value={bwThisMonth}
-              onChange={(e) => setBwThisMonth(e.target.value)}
-              placeholder={units === 'metric' ? 'e.g. 75.8' : 'e.g. 167.1'}
-              className="mt-1 w-full px-4 py-3 rounded-lg border border-stone-200 bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500"
-            />
-          </div>
-
-          <div>
-            <label className="text-sm font-medium text-stone-700">Your target monthly weight gain ({unitW}/month)</label>
-            <input
-              type="number"
-              step="0.1"
-              value={targetMonthlyGain}
-              onChange={(e) => setTargetMonthlyGain(e.target.value)}
-              placeholder={units === 'metric' ? 'e.g. 1.0' : 'e.g. 2.2'}
-              className="mt-1 w-full px-4 py-3 rounded-lg border border-stone-200 bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500"
-            />
-            <p className="text-xs text-stone-500 mt-1">From your original MacroMetric plan</p>
-          </div>
-
-          <div>
-            <label className="text-sm font-medium text-stone-700">Has your strength gone up clearly since last month?</label>
-            <p className="text-xs text-stone-500 mt-0.5">More reps or load on most lifts</p>
-            <div className="grid grid-cols-2 gap-2 mt-2">
-              {[{ v: true, l: 'Yes' }, { v: false, l: 'No' }].map((opt) => (
-                <button
-                  key={opt.l}
-                  onClick={() => setStrengthUp(opt.v)}
-                  className={`p-3 rounded-lg border transition-colors ${
-                    strengthUp === opt.v ? 'border-orange-500 bg-orange-50' : 'border-stone-200 hover:border-orange-500 hover:bg-orange-50'
-                  }`}
-                >
-                  <span className="font-medium text-stone-900 text-sm">{opt.l}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <PrimaryButton onClick={handleSubmit} disabled={!isValid} className="mt-6">
-          Run my check-in <ArrowRight className="w-4 h-4" />
-        </PrimaryButton>
-      </div>
-    </Card>
-  );
-};
-
-// =====================================================
-// BULKING CHECK-IN LOGIC  (unchanged)
-// =====================================================
-
-function processBulkingCheckIn(input, units = 'metric') {
-  const wUnit = units === 'imperial' ? 'lb' : 'kg';
-  const fmt = (kg) => units === 'imperial' ? kgToLb(kg).toFixed(1) : kg.toFixed(1);
-
-  const actualGain = input.bwThisMonth - input.bwLastMonth;
-  const target = input.targetMonthlyGain;
-  const tooFast = 1.5 * target;
-
-  let verdict, reason, message, detail, newTarget = input.currentTarget;
-
-  if (actualGain >= target && actualGain <= tooFast && input.strengthUp === true) {
-    // CASE 1
-    verdict = 'no_change';
-    reason = 'on_track';
-    message = "Keep going. You're growing exactly the way you should.";
-    detail = `You gained ${fmt(actualGain)} ${wUnit} vs your target of ${fmt(target)} ${wUnit}, and your strength is rising. Don't touch anything.`;
-  } else if (actualGain < target && input.strengthUp === false) {
-    // CASE 2
-    verdict = 'change';
-    reason = 'up';
-    message = "Time to eat more. Your body isn't getting enough fuel to grow.";
-    detail = `You gained ${fmt(actualGain)} ${wUnit} vs your target of ${fmt(target)} ${wUnit}, and strength hasn't moved. Bumping calories up by 150/day.`;
-    newTarget = roundUpTo50(input.currentTarget + 150);
-  } else if (actualGain > tooFast) {
-    // CASE 3
-    verdict = 'change';
-    reason = 'down';
-    message = "You're outpacing the muscle-building rate your body can use. The extra calories are going to fat.";
-    detail = `You gained ${fmt(actualGain)} ${wUnit} vs your target of ${fmt(target)} ${wUnit}. Cutting back by 150/day to keep the bulk lean.`;
-    newTarget = roundUpTo50(input.currentTarget - 150);
-  } else if (actualGain >= target && actualGain <= tooFast && input.strengthUp === false) {
-    // CASE 4
-    verdict = 'no_change';
-    reason = 'strength_lag';
-    message = "You're gaining as expected, but strength hasn't moved.";
-    detail = `Sometimes strength lags weight. Wait another month before changing anything. Make sure you're pushing every working set close to failure.`;
-  } else if (actualGain < target && input.strengthUp === true) {
-    // CASE 5
-    verdict = 'no_change';
-    reason = 'weight_lag';
-    message = "The scale isn't moving but your strength is. Your body is growing.";
-    detail = `Sometimes weight lags strength early in a bulk, and some of the surplus is being absorbed by metabolic adaptation without showing on the scale. Hold the line. Re-check in a month.`;
-  } else {
-    // catchall
-    verdict = 'no_change';
-    reason = 'on_track';
-    message = "No change needed.";
-    detail = `You gained ${fmt(actualGain)} ${wUnit} vs your target of ${fmt(target)} ${wUnit}.`;
-  }
-
-  let newFat, newCarbs;
-  if (verdict === 'change') {
-    newFat = roundToNearest5((newTarget * 0.30) / 9);
-    newCarbs = calculateCarbs(newTarget, input.proteinTarget, newFat);
-  }
-
-  return {
-    verdict,
-    reason,
-    message,
-    detail,
-    newTarget,
-    newProtein: input.proteinTarget,
-    newFat,
-    newCarbs,
-    actualGain,
-  };
-}
-
-// =====================================================
-// CHECK-IN RESULT SCREEN
-// Emits an updated MM1 code when (a) the check-in was started from a code
-// (ingestedPlan present) AND (b) the targets actually changed. On a no-change
-// verdict, calories didn't move — so the existing MealFrame plan is still
-// current and no new code is pushed.
-// =====================================================
-
-const CheckInResultScreen = ({ result, direction, units, ingestedPlan, onRestart, onBack }) => {
-  const isNoChange = result.verdict === 'no_change';
-  const isCut = direction === 'cut';
-  const [copied, setCopied] = useState(false);
-
-  // Complete only when the check-in was started from a code. null for manual.
-  const updatedCode = buildCheckInCode(result, direction, ingestedPlan, units);
-  // Only worth refreshing MealFrame when the numbers actually changed.
-  const showCode = updatedCode && !isNoChange;
-
-  const goToMealFrame = () => {
-    if (!updatedCode) return;
-    window.open(`${MEALFRAME_URL}?code=${encodeURIComponent(updatedCode)}`, '_blank');
-  };
-  const copyCode = async () => {
-    if (!updatedCode) return;
-    try {
-      await navigator.clipboard.writeText(updatedCode);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // clipboard may be unavailable; code is still visible to copy manually
-    }
-  };
-
-  const footerNote = isCut
-    ? "Come back next week with another two weeks of data. Most weeks should produce 'no change' — that's the system working."
-    : "Come back in a month. Patience is the dominant virtue of a clean lean bulk.";
-
-  return (
-    <Card className="max-w-2xl">
-      <BackButton onClick={onBack} />
-      <div>
-        <span className="text-xs font-semibold text-orange-600 tracking-widest uppercase">Check-in result</span>
-
-        {isNoChange ? (
-          <>
-            <h2 className="mt-2 text-3xl font-bold text-stone-900">
-              {result.reason === 'on_track' && "You're on track."}
-              {result.reason === 'recomp' && "You're recomping."}
-              {result.reason === 'accuracy' && "Track better, come back."}
-              {result.reason === 'strength_lag' && "Hold the line."}
-              {result.reason === 'weight_lag' && "Hold the line."}
-              {!['on_track', 'recomp', 'accuracy', 'strength_lag', 'weight_lag'].includes(result.reason) && "No change needed."}
-            </h2>
-            <p className="text-stone-700 mt-3 leading-relaxed">{result.message}</p>
-            {result.detail && (
-              <p className="text-stone-600 mt-3 text-sm leading-relaxed">{result.detail}</p>
-            )}
-
-            <div className="mt-6 bg-stone-50 border border-stone-200 rounded-xl p-5">
-              <div className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Keep eating</div>
-              <div className="text-4xl font-bold text-stone-900 mt-1">{result.newTarget}</div>
-              <div className="text-sm text-stone-600">kcal per day · same as before</div>
-            </div>
-          </>
-        ) : (
-          <>
-            <h2 className="mt-2 text-3xl font-bold text-stone-900">
-              {result.reason === 'down' ? 'Reducing your target.' : 'Bumping your target up.'}
-            </h2>
-            <p className="text-stone-700 mt-3 leading-relaxed">{result.message}</p>
-            {result.detail && (
-              <p className="text-stone-600 mt-3 text-sm leading-relaxed">{result.detail}</p>
-            )}
-
-            <div className="mt-6 bg-gradient-to-br from-orange-50 to-amber-50 border border-orange-200 rounded-xl p-6">
-              <div className="text-xs font-semibold text-orange-700 uppercase tracking-wider">Your new daily target</div>
-              <div className="text-5xl font-bold text-stone-900 mt-1">{result.newTarget}</div>
-              <div className="text-sm text-stone-600 mt-1">kcal per day</div>
-            </div>
-
-            {result.newFat !== undefined && (
-              <div className="mt-4">
-                <h3 className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-3">Updated macros</h3>
-                <div className="space-y-2">
-                  <div className="bg-white border border-stone-200 rounded-xl p-4 flex items-center justify-between">
-                    <div className="font-medium text-stone-900">Protein</div>
-                    <div className="text-xl font-bold text-stone-900">{result.newProtein}g</div>
-                  </div>
-                  <div className="bg-white border border-stone-200 rounded-xl p-4 flex items-center justify-between">
-                    <div className="font-medium text-stone-900">Fat</div>
-                    <div className="text-xl font-bold text-stone-900">{result.newFat}g</div>
-                  </div>
-                  <div className="bg-white border border-stone-200 rounded-xl p-4 flex items-center justify-between">
-                    <div className="font-medium text-stone-900">Carbs</div>
-                    <div className="text-xl font-bold text-stone-900">{result.newCarbs}g</div>
-                  </div>
-                  <div className="bg-white border border-stone-200 rounded-xl p-4 flex items-center justify-between">
-                    <div className="font-medium text-stone-900">Fiber <span className="text-xs font-normal text-stone-500">(min)</span></div>
-                    <div className="text-xl font-bold text-stone-900">{calculateFiber(result.newTarget)}g</div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </>
-        )}
-
-        {/* MealFrame handoff — only when targets changed AND we have a full code */}
-        {showCode && (
-          <>
-            <div className="border-t border-stone-200 my-6"></div>
-            <div className="bg-stone-900 rounded-xl p-5 text-center">
-              <h4 className="text-xs font-semibold text-orange-400 uppercase tracking-wider">Your Updated MacroMetric™ Code</h4>
-              <p className="text-stone-400 text-xs mt-1">Your numbers changed — paste this into MealFrame™ to refresh your meal structure and examples. Keep it for your next check-in, too.</p>
-              <div className="mt-3 bg-stone-800 border border-stone-700 rounded-lg px-3 py-3">
-                <code className="text-orange-300 text-xs break-all leading-relaxed">{updatedCode}</code>
-              </div>
-              <button
-                onClick={copyCode}
-                className="mt-3 inline-flex items-center gap-2 bg-white text-stone-900 text-sm font-medium py-2 px-4 rounded-full hover:bg-stone-100 transition-colors"
-              >
-                <Copy className="w-4 h-4" /> {copied ? 'Copied!' : 'Copy code'}
-              </button>
-            </div>
-
-            <div className="text-center mt-6">
-              <h3 className="text-xl font-bold text-stone-900">Refresh your meals</h3>
-              <p className="text-stone-600 mt-2 text-sm leading-relaxed">
-                Your targets moved, so your meal structure should too. Continue to <strong>MealFrame™</strong> with your updated code.
-              </p>
-              <div className="space-y-2 mt-5">
-                <PrimaryButton onClick={goToMealFrame}>
-                  Continue to MealFrame™ <ArrowRight className="w-4 h-4" />
-                </PrimaryButton>
-              </div>
-            </div>
-          </>
-        )}
-
-        {/* Targets changed but the check-in was started manually — can't build a complete code */}
-        {result.verdict === 'change' && !updatedCode && (
-          <div className="mt-6 bg-stone-50 border border-stone-200 rounded-xl p-4 text-xs text-stone-500 text-center leading-relaxed">
-            Your targets changed. To get a MealFrame™ code automatically next time, start your check-in from your MacroMetric™ code instead of entering numbers by hand.
-          </div>
-        )}
-
-        {/* No change → existing MealFrame plan is still current */}
-        {isNoChange && ingestedPlan && (
-          <div className="mt-6 bg-stone-50 border border-stone-200 rounded-xl p-4 text-xs text-stone-500 text-center leading-relaxed">
-            Your numbers didn't change, so your current MealFrame™ structure is still on point — no refresh needed.
-          </div>
-        )}
-
-        <div className="mt-6 bg-stone-50 border border-stone-200 rounded-xl p-5 text-sm text-stone-600">
-          {footerNote}
-        </div>
-
-        <div className="text-center mt-6">
-          <button onClick={onRestart} className="text-xs text-stone-500 hover:text-stone-700 underline underline-offset-2">
-            Run another check-in or set up a new plan
-          </button>
-        </div>
-      </div>
+      <PrimaryButton onClick={submit} disabled={!id.trim()} className="mt-5">Reload structure <ArrowRight className="w-4 h-4" /></PrimaryButton>
     </Card>
   );
 };
@@ -2213,239 +1508,135 @@ const CheckInResultScreen = ({ result, direction, units, ingestedPlan, onRestart
 export default function App() {
   const [screen, setScreen] = useState('landing');
   const [units, setUnits] = useState('metric');
-  const [decoded, setDecoded] = useState(null);       // the SS1 code payload
-  const [pastedCode, setPastedCode] = useState('');   // for the code screen prefill
-  const [codeError, setCodeError] = useState(null);   // for URL-prefill failures
-  const [details, setDetails] = useState({});         // age + activity
-  const [result, setResult] = useState(null);
+  const [code, setCode] = useState(null);          // decoded MM1
+  const [pastedCode, setPastedCode] = useState('');
+  const [codeError, setCodeError] = useState(null);
+  const [answers, setAnswers] = useState({});
+  const [times, setTimes] = useState(null);        // {wake, sleep, train} in minutes
+  const [structure, setStructure] = useState(null);
+  const [plan, setPlan] = useState(null);
+  const [personalization, setPersonalization] = useState(null);
+  const [templateId, setTemplateId] = useState('');
+  const [decodedMode, setDecodedMode] = useState(false);
 
-  const [checkInResult, setCheckInResult] = useState(null);
-  const [checkInDirection, setCheckInDirection] = useState(null);
-  const [ingestedPlan, setIngestedPlan] = useState(null); // decoded MM1 for check-in (null = manual)
-  const [checkInPrefill, setCheckInPrefill] = useState({}); // display-unit prefill for the form
-
-  // Click-through from PhysiquePlan: ?code=… → auto-load, zero typing.
+  // ?code= click-through from MacroMetric → auto-load.
   useEffect(() => {
     try {
       const params = new URLSearchParams(window.location.search);
       const c = params.get('code');
       if (!c) return;
-      const res = decodeShredSmartCode(c);
-      if (res.ok) {
-        setDecoded(res.data);
-        setUnits(res.data.units);
-        setPastedCode(c);
-        setScreen('intro');
-      } else {
-        setPastedCode(c);
-        setCodeError(res.error);
-        setScreen('code');
+      // Accept either an MM1 code (normal handoff) or an MF1 ID (shared link).
+      if (c.startsWith('MF1-')) {
+        const res = decodeTemplateId(c);
+        if (res.ok) { loadFromId(res.data); return; }
       }
-    } catch {
-      // window unavailable (SSR/sandbox) — ignore, user can paste manually.
-    }
+      const res = decodeMacroMetricCode(c);
+      if (res.ok) { setCode(res.data); setUnits(res.data.units); setPastedCode(c); setScreen('intro'); }
+      else { setPastedCode(c); setCodeError(res.error); setScreen('code'); }
+    } catch {}
   }, []);
 
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, [screen]);
+  useEffect(() => { window.scrollTo(0, 0); }, [screen]);
 
+  // Build structure once questionnaire completes.
   useEffect(() => {
-    if (screen === 'loading' && decoded) {
+    if (screen === 'loading' && code) {
       const t = setTimeout(() => {
-        const prescription = buildPrescription({
-          height: decoded.height,
-          weight: decoded.weight,
-          tier: decoded.tier,
-          subBracket: decoded.subBracket,
-          direction: decoded.direction,
-          archetypeId: decoded.archetypeId,
-          goalLow: decoded.goalLow,
-          goalHigh: decoded.goalHigh,
-          ...details,
-        });
-        setResult(prescription);
+        let struct = code.direction === 'cut' ? selectCutStructure(answers) : selectBulkStructure(answers, code);
+        // Late-evening training: keep the largest meal, but note it lands before the gym.
+        const trains = struct.flags?.workout !== 'none';
+        const w = classifyWorkout(times?.wake ?? DEFAULT_WAKE, times?.sleep ?? DEFAULT_SLEEP, times?.train ?? DEFAULT_TRAIN, trains);
+        const hungry = !!struct.flags?.hungryPostWorkout;
+        if (w.evening && !w.fits) {
+          const after = hungry
+            ? 'with a protein shake or light snack right after training, since you get hungry then.'
+            : 'with an optional light snack or shake after if you\'re hungry.';
+          struct = {
+            ...struct,
+            notes: [...(struct.notes || []), `You train late, so a big post-workout meal wouldn't digest before bed. Your largest meal is placed before the gym — about 2 hours prior, so it settles before you train — ${after}`],
+          };
+        }
+        const mealPlan = buildMealPlan(code, struct, { eveningNoFit: w.evening && !w.fits });
+        const pers = {
+          wake: times?.wake ?? DEFAULT_WAKE,
+          sleep: times?.sleep ?? DEFAULT_SLEEP,
+          train: struct.flags?.workout === 'none' ? 0 : (times?.train ?? DEFAULT_TRAIN),
+          dessert: !!struct.flags?.dessert,
+          alcohol: !!struct.flags?.alcohol,
+          shakePre: !!struct.flags?.shakePre,
+          shakeAnchor: !!struct.flags?.shakeAnchor || !!struct.flags?.amProtein,
+          hungryPostWorkout: hungry,
+        };
+        const id = buildTemplateId(code, struct, pers);
+        setStructure(struct); setPlan(mealPlan); setPersonalization(pers); setTemplateId(id);
+        setDecodedMode(false);
         setScreen('results');
-      }, 1800);
+      }, 1600);
       return () => clearTimeout(t);
     }
-  }, [screen, decoded, details]);
+  }, [screen, code, answers, times]);
+
+  const loadFromId = (data) => {
+    const p = data.personalization || {};
+    // Reconstruct the post-workout-hunger flag onto the structure so buildMealPlan
+    // reproduces the same shake; recompute eveningNoFit from the decoded times.
+    const struct = {
+      ...data.structure,
+      flags: {
+        ...(data.structure.flags || {}),
+        hungryPostWorkout: !!p.hungryPostWorkout,
+        shakePre: !!p.shakePre,
+        shakeAnchor: !!p.shakeAnchor,
+        workout: p.train > 0 ? (data.structure.flags?.workout || 'varies') : 'none',
+      },
+    };
+    const w = classifyWorkout(p.wake, p.sleep, p.train, p.train > 0);
+    setCode(data.code);
+    setStructure(struct);
+    setPersonalization(p);
+    setPlan(buildMealPlan(data.code, struct, { eveningNoFit: w.evening && !w.fits }));
+    setTemplateId(buildTemplateId(data.code, struct, p));
+    setDecodedMode(true);
+    setScreen('results');
+  };
 
   const restart = () => {
-    setScreen('landing');
-    setUnits('metric');
-    setDecoded(null);
-    setPastedCode('');
-    setCodeError(null);
-    setDetails({});
-    setResult(null);
-    setCheckInResult(null);
-    setCheckInDirection(null);
-    setIngestedPlan(null);
-    setCheckInPrefill({});
-  };
-
-  const goRerun = () => window.open(PLAN_URL, '_blank');
-
-  // An MM1 code was pasted into the check-in flow: recover everything, pre-fill
-  // the form (in display units), and route straight to the right check-in.
-  const onCheckInCodeDecoded = (mm1) => {
-    setIngestedPlan(mm1);
-    setUnits(mm1.units);
-    setCheckInDirection(mm1.direction);
-
-    const toDispW = (kg) => mm1.units === 'imperial'
-      ? String(Math.round(kgToLb(kg) * 10) / 10)
-      : String(Math.round(kg * 10) / 10);
-
-    if (mm1.direction === 'cut') {
-      const { rate } = getCuttingRate(mm1.tier, mm1.subBracket, mm1.height - mm1.weight);
-      const weeklyLossKg = mm1.weight * rate;
-      setCheckInPrefill({
-        currentTarget: String(mm1.target),
-        proteinTarget: String(mm1.protein),
-        height: mm1.units === 'imperial' ? String(Math.round(mm1.height / 2.54)) : String(mm1.height),
-        targetRate: toDispW(weeklyLossKg),
-      });
-      setScreen('checkin_cut');
-    } else {
-      const monthlyGainKg = mm1.weight * (getBulkGainRatePct(mm1.tier, mm1.subBracket) / 100);
-      setCheckInPrefill({
-        currentTarget: String(mm1.target),
-        proteinTarget: String(mm1.protein),
-        targetMonthlyGain: toDispW(monthlyGainKg),
-      });
-      setScreen('checkin_bulk');
-    }
-  };
-
-  // Manual fallback: no code, clear any ingested plan/prefill.
-  const onCheckInManual = () => {
-    setIngestedPlan(null);
-    setCheckInPrefill({});
-    setScreen('checkin_router');
+    setScreen('landing'); setCode(null); setPastedCode(''); setCodeError(null);
+    setAnswers({}); setTimes(null); setStructure(null); setPlan(null); setPersonalization(null);
+    setTemplateId(''); setDecodedMode(false);
   };
 
   return (
     <Container>
-      {screen === 'landing' && (
-        <LandingScreen
-          onStart={() => setScreen('code')}
-          onCheckIn={() => setScreen('checkin_code')}
-        />
-      )}
+      {screen === 'landing' && <LandingScreen onStart={() => setScreen('code')} onDecode={() => setScreen('decode_id')} />}
 
-      {/* PLAN SETUP FLOW */}
       {screen === 'code' && (
-        <CodeScreen
-          initialCode={pastedCode}
-          initialError={codeError}
-          onDecoded={(data, code) => {
-            setDecoded(data);
-            setUnits(data.units);
-            setPastedCode(code);
-            setCodeError(null);
-            setScreen('intro');
-          }}
-          onBack={() => setScreen('landing')}
-        />
+        <CodeScreen initialCode={pastedCode} initialError={codeError}
+          onDecoded={(data, c) => { setCode(data); setUnits(data.units); setPastedCode(c); setCodeError(null); setScreen('intro'); }}
+          onBack={() => setScreen('landing')} />
       )}
-      {screen === 'intro' && decoded && (
-        <IntroScreen
-          decoded={decoded}
-          units={units}
-          onContinue={() => setScreen('principle')}
-          onBack={() => setScreen('code')}
-          onRerun={goRerun}
-        />
+      {screen === 'intro' && code && (
+        <IntroScreen code={code} units={units} onContinue={() => setScreen('questionnaire')} onBack={() => setScreen('code')} />
       )}
-      {screen === 'principle' && (
-        <PrincipleScreen
-          onContinue={() => setScreen('details')}
-          onBack={() => setScreen('intro')}
-        />
+      {screen === 'questionnaire' && code && (
+        <QuestionnaireScreen direction={code.direction} answers={answers} setAnswers={setAnswers}
+          onComplete={() => setScreen('times')} onBack={() => setScreen('intro')} />
       )}
-      {screen === 'details' && (
-        <DetailsScreen
-          currentStep={1}
-          totalSteps={1}
-          onContinue={(data) => { setDetails(data); setScreen('loading'); }}
-          onBack={() => setScreen('principle')}
-        />
+      {screen === 'times' && code && (
+        <TimesScreen
+          initial={times}
+          showTrain={answers.workout !== 'none'}
+          onContinue={(t) => { setTimes(t); setScreen('loading'); }}
+          onBack={() => setScreen('questionnaire')} />
       )}
       {screen === 'loading' && <LoadingScreen />}
-      {screen === 'results' && result && (
-        <ResultsScreen
-          result={result}
-          units={units}
-          onRestart={restart}
-          onBack={() => setScreen('details')}
-        />
+      {screen === 'results' && structure && plan && (
+        <ResultsScreen code={code} structure={structure} personalization={personalization} plan={plan}
+          templateId={templateId} decodedMode={decodedMode}
+          onRestart={restart} onBack={() => setScreen(decodedMode ? 'decode_id' : 'questionnaire')} />
       )}
 
-      {/* CHECK-IN FLOW */}
-      {screen === 'checkin_code' && (
-        <CheckInCodeScreen
-          onDecoded={onCheckInCodeDecoded}
-          onManual={onCheckInManual}
-          onBack={() => setScreen('landing')}
-        />
-      )}
-      {screen === 'checkin_router' && (
-        <CheckInRouterScreen
-          onSelect={(d) => {
-            setCheckInDirection(d);
-            setScreen(d === 'cut' ? 'checkin_cut_units' : 'checkin_bulk_units');
-          }}
-          onBack={() => setScreen('checkin_code')}
-        />
-      )}
-      {screen === 'checkin_cut_units' && (
-        <UnitsScreen
-          onSelect={(u) => { setUnits(u); setScreen('checkin_cut'); }}
-          onBack={() => setScreen('checkin_router')}
-        />
-      )}
-      {screen === 'checkin_cut' && (
-        <CuttingCheckInScreen
-          units={units}
-          prefill={checkInPrefill}
-          onSubmit={(data) => {
-            const res = processCuttingCheckIn(data, units);
-            setCheckInResult({ ...res, currentWeight: data.bwThisWeek });
-            setScreen('checkin_result');
-          }}
-          onBack={() => setScreen(ingestedPlan ? 'checkin_code' : 'checkin_cut_units')}
-        />
-      )}
-      {screen === 'checkin_bulk_units' && (
-        <UnitsScreen
-          onSelect={(u) => { setUnits(u); setScreen('checkin_bulk'); }}
-          onBack={() => setScreen('checkin_router')}
-        />
-      )}
-      {screen === 'checkin_bulk' && (
-        <BulkingCheckInScreen
-          units={units}
-          prefill={checkInPrefill}
-          onSubmit={(data) => {
-            const res = processBulkingCheckIn(data, units);
-            setCheckInResult({ ...res, currentWeight: data.bwThisMonth });
-            setScreen('checkin_result');
-          }}
-          onBack={() => setScreen(ingestedPlan ? 'checkin_code' : 'checkin_bulk_units')}
-        />
-      )}
-      {screen === 'checkin_result' && checkInResult && (
-        <CheckInResultScreen
-          result={checkInResult}
-          direction={checkInDirection}
-          units={units}
-          ingestedPlan={ingestedPlan}
-          onRestart={restart}
-          onBack={() => setScreen(checkInDirection === 'cut' ? 'checkin_cut' : 'checkin_bulk')}
-        />
-      )}
+      {screen === 'decode_id' && <DecodeIdScreen onDecoded={loadFromId} onBack={() => setScreen('landing')} />}
     </Container>
   );
 }
