@@ -41,8 +41,11 @@ const hhmmToMinutes = (s) => {
 
 const CALORIE_VECTORS = {
   cut: {
-    2: { light: [50, 50], moderate: [45, 55], heavy: [30, 70] },
-    3: { light: [34, 33, 33], moderate: [25, 30, 45], heavy: [15, 15, 70] },
+    // "light" = the even tier. NOT perfectly flat: it carries a mild backload onto
+    // the LAST meal (a little more food later in the day). The ravenous-post-workout
+    // override below can redirect that bump onto a middle meal instead.
+    2: { light: [40, 60], moderate: [45, 55], heavy: [30, 70] },
+    3: { light: [25, 35, 40], moderate: [25, 30, 45], heavy: [15, 15, 70] },
   },
   bulk: {
     3: { low: [33, 33, 34], mid: [30, 35, 35], high: [30, 35, 35] },
@@ -50,6 +53,12 @@ const CALORIE_VECTORS = {
     5: { low: [20, 20, 20, 20, 20], mid: [20, 20, 20, 20, 20], high: [18, 20, 22, 20, 20] },
   },
 };
+
+// Even-tier post-workout bump: when the lifter is ravenous post-workout AND the
+// post-workout meal is a MIDDLE meal (trains between meals), bump that meal and
+// pull the calories from the first meal — instead of the default last-meal lean.
+// If the post-workout meal IS the last meal, the default vector already covers it.
+const EVEN_RAVENOUS_POST_CUT = { 3: [25, 40, 35] }; // 2-meal has no middle meal
 
 const PROTEIN_WEIGHTS = {
   cut: {
@@ -234,11 +243,11 @@ const subBracketTierLabel = (tier, sub) => {
 //            workout, hungryPostWorkout, alcohol, schedule, restriction.
 
 const CUT_QUESTIONS = [
-  { id: 'satiety', q: 'When you eat a normal meal, how long does it hold you?',
+  { id: 'satiety', q: 'After a normal-sized meal, how long does your fullness last?',
     options: [
-      ['large','I need a large meal, or I\'m hungry within an hour or two'],
-      ['moderate','A moderate meal holds me a few hours'],
-      ['easily','I\'m satisfied easily, even by smaller meals'],
+      ['large','Not long — I need a big meal, or I\'m hungry again within an hour or two'],
+      ['moderate','A moderate meal keeps me full for a few hours'],
+      ['easily','I stay satisfied easily, even after smaller meals'],
     ] },
   { id: 'morningHunger', q: 'Can you comfortably skip breakfast (water + coffee) without struggling?',
     options: [['easy','Yes, easily'],['ok','I can manage it'],['hard','No, I get very hungry in the morning']] },
@@ -258,18 +267,16 @@ const CUT_QUESTIONS = [
     ] },
   { id: 'dinnerControl', q: 'What does dinner usually look like?',
     options: [
-      ['control','I cook / control it (alone or with partner)'],
+      ['control','I cook it / control the ingredients (alone or with a partner)'],
       ['family','Family or partner cooks, we eat together'],
       ['social','Frequent social or restaurant dinners'],
       ['varies','It varies a lot week to week'],
     ] },
   { id: 'workout', q: 'When do you usually train?',
     options: [
-      ['before_first','Before my first meal (fasted or pre-shake)'],
-      ['midday','Midday / afternoon, between meals'],
+      ['before_first','Before my first meal (fasted or pre-workout shake)'],
+      ['midday','Morning, afternoon, or evening — between two meals'],
       ['evening','Evening, near my last meal'],
-      ['none','I don\'t train / rarely'],
-      ['varies','It varies'],
     ] },
   { id: 'hungryPostWorkout', q: 'Do you get really hungry right after training?',
     options: [
@@ -278,7 +285,7 @@ const CUT_QUESTIONS = [
     ] },
   { id: 'cravings', q: 'How have cravings affected your past diet attempts?',
     options: [
-      ['wrecked','They\'ve wrecked my cuts — I do better with a daily planned treat'],
+      ['wrecked','They\'ve wrecked my cuts — I need a treat every day'],
       ['manage','I get them but I manage'],
       ['none','Not really an issue'],
     ] },
@@ -551,13 +558,31 @@ function pickDensityBand(direction, slotPos, slotCount, tier, heightDiff) {
   }
 }
 
+// Which meal index is the "post-workout meal" — derived from TRAIN TIME (which is
+// in the MF1 payload), not the workout-category answer, so a decoded ID rebuilds
+// the same plan. Morning training → first meal; evening (that fits) → last meal;
+// evening that doesn't fit (big meal sits pre-gym) → none; between cutoffs → middle.
+function postWorkoutMealIndex(timing, mealCount) {
+  if (!timing || !timing.trains || !timing.train) return -1;
+  const w = classifyWorkout(timing.wake, timing.sleep, timing.train, true);
+  if (w.morning) return 0;
+  if (w.evening) return w.fits ? mealCount - 1 : -1;
+  return Math.min(1, mealCount - 1); // between meals → the meal after the first
+}
+
 function buildMealPlan(code, structure, timing = {}) {
   const { direction } = code;
   const tier = direction === 'cut' ? structure.backloadTier : structure.loadTier;
   const mealCount = structure.mealCount;
   const heightDiff = code.height - code.weight;
 
-  const calVec = CALORIE_VECTORS[direction][mealCount][tier];
+  let calVec = CALORIE_VECTORS[direction][mealCount][tier];
+  // Even-tier ravenous override: bump the post-workout meal when it's a MIDDLE
+  // meal (otherwise the default last-meal lean already handles it).
+  if (direction === 'cut' && tier === 'light' && structure.flags?.hungryPostWorkout && EVEN_RAVENOUS_POST_CUT[mealCount]) {
+    const pwIdx = postWorkoutMealIndex(timing, mealCount);
+    if (pwIdx > 0 && pwIdx < mealCount - 1) calVec = EVEN_RAVENOUS_POST_CUT[mealCount];
+  }
   const pW = PROTEIN_WEIGHTS[direction][mealCount][tier];
   const fW = FAT_WEIGHTS[direction][mealCount][tier];
   const fibW = FIBER_WEIGHTS[direction][mealCount][tier];
@@ -774,7 +799,7 @@ function buildDescription(code, structure, p) {
     } else if (structure.backloadTier === 'moderate') {
       lines.push('Keep your earlier meals protein- and fiber-forward with low calorie density. Your dinner is the largest meal — enough budget to feel satisfied while staying in the deficit.');
     } else {
-      lines.push('Keep all your meals balanced, high in protein and fiber, and low in calorie density — think lean protein, vegetables, and lower-density carbs like potatoes or rice. Similar-sized meals work well for you — your last meal doesn\'t have to be the biggest.');
+      lines.push('Keep your meals high in protein and fiber and low in calorie density — lean protein, vegetables, and lower-density carbs like potatoes or rice. Your meals are fairly balanced, with a little more food later in the day (or around your workout if you train hungry).');
     }
   } else {
     if (structure.loadTier === 'high') {
@@ -1248,7 +1273,7 @@ const ResultsScreen = ({ code, structure, personalization, plan, templateId, dec
   const [copied, setCopied] = useState(false);
   const isCut = code.direction === 'cut';
   const tier = isCut ? structure.backloadTier : structure.loadTier;
-  const tierLabel = { light: 'Even split', moderate: 'Moderate backload', heavy: 'Heavy backload', low: 'Low load', mid: 'Moderate load', high: 'High load' }[tier];
+  const tierLabel = { light: 'Balanced', moderate: 'Moderate backload', heavy: 'Heavy backload', low: 'Low load', mid: 'Moderate load', high: 'High load' }[tier];
   const morningLabel = { if: 'Intermittent fasting', early_feed: 'Early protein feeding', fasted: 'Fasted morning', light_anchor: 'Light start', even: 'Even meals' }[structure.morningMode];
   const prose = buildDescription(code, structure, personalization);
   const restriction = structure.flags?.restriction || ['none'];
@@ -1440,7 +1465,13 @@ export default function App() {
             notes: [...(struct.notes || []), `You train late, so a big post-workout meal wouldn't digest before bed. Your largest meal is placed before the gym — about 2 hours prior, so it settles before you train — ${after}`],
           };
         }
-        const mealPlan = buildMealPlan(code, struct, { eveningNoFit: w.evening && !w.fits });
+        const mealPlan = buildMealPlan(code, struct, {
+          eveningNoFit: w.evening && !w.fits,
+          trains,
+          wake: times?.wake ?? DEFAULT_WAKE,
+          sleep: times?.sleep ?? DEFAULT_SLEEP,
+          train: trains ? (times?.train ?? DEFAULT_TRAIN) : 0,
+        });
         const pers = {
           wake: times?.wake ?? DEFAULT_WAKE,
           sleep: times?.sleep ?? DEFAULT_SLEEP,
@@ -1476,7 +1507,11 @@ export default function App() {
     setCode(data.code);
     setStructure(struct);
     setPersonalization(p);
-    setPlan(buildMealPlan(data.code, struct, { eveningNoFit: w.evening && !w.fits }));
+    setPlan(buildMealPlan(data.code, struct, {
+      eveningNoFit: w.evening && !w.fits,
+      trains: p.train > 0,
+      wake: p.wake, sleep: p.sleep, train: p.train,
+    }));
     setTemplateId(buildTemplateId(data.code, struct, p));
     setDecodedMode(true);
     setScreen('results');
