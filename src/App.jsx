@@ -44,8 +44,8 @@ const CALORIE_VECTORS = {
     // "light" = the even tier. NOT perfectly flat: it carries a mild backload onto
     // the LAST meal (a little more food later in the day). The ravenous-post-workout
     // override below can redirect that bump onto a middle meal instead.
-    2: { light: [40, 60], moderate: [45, 55], heavy: [30, 70] },
-    3: { light: [25, 35, 40], moderate: [25, 30, 45], heavy: [15, 15, 70] },
+    2: { light: [40, 60], moderate: [38, 62], heavy: [35, 65] },
+    3: { light: [25, 35, 40], moderate: [25, 30, 45], heavy: [25, 28, 47] },
   },
   bulk: {
     3: { low: [33, 33, 34], mid: [30, 35, 35], high: [30, 35, 35] },
@@ -54,16 +54,19 @@ const CALORIE_VECTORS = {
   },
 };
 
-// Even-tier post-workout bump: when the lifter is ravenous post-workout AND the
-// post-workout meal is a MIDDLE meal (trains between meals), bump that meal and
-// pull the calories from the first meal — instead of the default last-meal lean.
-// If the post-workout meal IS the last meal, the default vector already covers it.
-const EVEN_RAVENOUS_POST_CUT = { 3: [25, 40, 35] }; // 2-meal has no middle meal
+// Breakfast-mode calorie vectors (3-meal only): a real breakfast, a smaller
+// "valley" lunch, and the biggest meal still at dinner (never front-loaded).
+// 2-meal breakfast plans reuse the IF 2-meal shape (breakfast + dinner).
+const CUT_BREAKFAST_VECTORS = {
+  3: { light: [33, 30, 37], moderate: [33, 25, 42], heavy: [30, 22, 48] },
+};
 
 const PROTEIN_WEIGHTS = {
   cut: {
-    2: { light: [1, 1], moderate: [1.1, 0.95], heavy: [1.6, 0.7] },
-    3: { light: [1, 1, 1], moderate: [1.2, 1.2, 0.9], heavy: [1.5, 1.5, 0.6] },
+    // Cut protein is distributed EVENLY (the engine reads this as a fallback; the
+    // cut macro build uses an even split + per-meal cap, not these weights).
+    2: { light: [1, 1], moderate: [1, 1], heavy: [1, 1] },
+    3: { light: [1, 1, 1], moderate: [1, 1, 1], heavy: [1, 1, 1] },
   },
   bulk: {
     3: { low: [1, 1, 1], mid: [1, 1, 1], high: [1, 1, 1] },
@@ -74,8 +77,8 @@ const PROTEIN_WEIGHTS = {
 
 const FAT_WEIGHTS = {
   cut: {
-    2: { light: [1, 1], moderate: [0.9, 1.1], heavy: [0.6, 1.6] },
-    3: { light: [1, 1, 1], moderate: [0.9, 0.9, 1.2], heavy: [0.6, 0.6, 1.8] },
+    2: { light: [1, 1], moderate: [0.9, 1.1], heavy: [0.8, 1.2] },
+    3: { light: [1, 1, 1], moderate: [0.9, 0.95, 1.15], heavy: [0.85, 0.85, 1.3] },
   },
   bulk: {
     3: { low: [1, 1, 1], mid: [1, 1, 1], high: [1, 1, 1] },
@@ -121,6 +124,19 @@ const SHAKE_PROTEIN_G = 25;             // ~25g protein, ~110 kcal drink
 const EARLY_FEED_SHAKE_PCT = 0.10;      // early protein feeding = ~10% of daily kcal
 const EARLY_FEED_SHAKE_PROTEIN_G = 35;  // protein-forward AM feeding (helps plant-based reach targets)
 const BULK_AM_PROTEIN_FLOOR = 25;       // bulk "light anchor" mandatory morning protein
+
+// --- PER-MEAL MACRO GUARDRAILS (cut) -----------------------------------------
+// Protein distributes evenly across meals, capped per meal (3-meal plans keep
+// meals moderate; 2-meal plans allow bigger protein meals + a shake to top up).
+// Carbs are the remainder and carry the backload; every meal gets carb + fat
+// floors so it's real food, never a supplement-only "bomb". The last meal is
+// capped so we never bank an unrealistic dinner.
+const PROTEIN_CAP_BY_MEALS = { 2: 70, 3: 55 };
+const PROTEIN_FLOOR_G = 20;
+const CARB_FLOOR_G = 25;
+const FAT_FLOOR_G = 10;
+const LAST_MEAL_MAX_PCT = { 2: 0.62, 3: 0.50 };
+const LAST_MEAL_MAX_KCAL_HEAVY = 1100; // heavy/social: enough to absorb a family dinner
 
 const BULK_LOAD_KCAL_PER_KG = [
   { maxLoad: 3.5, tier: 'low' },
@@ -250,7 +266,7 @@ const CUT_QUESTIONS = [
       ['easily','I stay satisfied easily, even after smaller meals'],
     ] },
   { id: 'morningHunger', q: 'Can you comfortably skip breakfast (water + coffee) without struggling?',
-    options: [['easy','Yes, easily'],['ok','I can manage it'],['hard','No, I get very hungry in the morning']] },
+    options: [['easy','Yes, easily (no morning appetite)'],['ok','I can manage (usually eat breakfast, but can skip it)'],['hard','No, I get very hungry in the morning']] },
   { id: 'eveningOvereat', q: 'Do you tend to eat more in the evenings?',
     options: [
       ['no','No'],
@@ -276,7 +292,7 @@ const CUT_QUESTIONS = [
     options: [
       ['before_first','Before my first meal (fasted or pre-workout shake)'],
       ['midday','Morning, afternoon, or evening — between two meals'],
-      ['evening','Evening, near my last meal'],
+      ['evening','Evening, after my last meal'],
     ] },
   { id: 'hungryPostWorkout', q: 'Do you get really hungry right after training?',
     options: [
@@ -378,12 +394,12 @@ const BULK_QUESTIONS = [
 // =====================================================
 // CUT SELECTION ENGINE  (template-classifier model)
 // Returns { morningMode, mealCount, backloadTier, flags, notes[] }
-//   morningMode:  'if' (fast 3-5h)  |  'early_feed' (~10% AM protein feeding)
+//   morningMode:  'if' (fast to a midday first meal)  |  'breakfast' (real AM meal)
 //   mealCount:    2  |  3            (default leans 3, the workhorse)
-//   backloadTier: 'light' (none/even) | 'moderate' | 'heavy'
+//   backloadTier: 'light' (even) | 'moderate' | 'heavy'
 //
-// The base template = mealCount × morningMode (4 bases). Shake placement,
-// the cravings snack, and backload intensity are modifiers layered on top.
+// Backload is driven by the evening/dinner answers only — post-workout hunger no
+// longer skews calories (it only affects shake placement, in buildMealPlan/timeline).
 // =====================================================
 
 function selectCutStructure(a) {
@@ -409,21 +425,12 @@ function selectCutStructure(a) {
     mealCount = (a.satiety === 'large') ? 2 : 3;
   }
 
-  // --- DECISION 2: morning mode — IF vs early protein feeding ---
-  let morningMode;
-  if (a.morningHunger === 'hard') {
-    morningMode = 'early_feed';        // can't tolerate a fast → ~10% AM feeding
-  } else if (a.morningHunger === 'easy') {
-    morningMode = 'if';                // comfortable fasting → fast 3-5h
-  } else {
-    // Neutral morning ('ok'): early feeding on 2-meal plans (keeps per-meal
-    // protein reachable — ~60-80g/meal is excessive otherwise, esp. plant-based);
-    // IF is fine as the 3-meal default.
-    morningMode = (mealCount === 2) ? 'early_feed' : 'if';
-  }
-  if (morningMode === 'early_feed' && mealCount === 2 && a.morningHunger === 'ok') {
-    notes.push('On a 2-meal day we open with a small high-protein feeding so your two main meals don\'t each have to carry an unrealistic protein load.');
-  }
+  // --- DECISION 2: morning mode — IF vs breakfast ---
+  // Driven only by morning appetite. There is no "10% feeding" mode: a genuinely
+  // morning-hungry lifter simply eats breakfast. "Easy" and "I can manage" both
+  // default to IF (the cleaner cut tool, and late risers fast well); "manage"
+  // gets breakfast offered as the alternative plan.
+  let morningMode = (a.morningHunger === 'hard') ? 'breakfast' : 'if';
 
   // --- DECISION 3: backload tier (none/even · moderate · heavy) ---
   let backloadTier;
@@ -438,18 +445,24 @@ function selectCutStructure(a) {
     backloadTier = 'moderate';
   } else if (a.eveningOvereat === 'no' && (a.daytimeControl === 'cook' || a.daytimeControl === 'wfh') && a.dinnerControl === 'control') {
     // none/even: steady appetite + cooks own + doesn't overeat at night.
-    // The last meal need NOT be the largest here (even split is fine).
     backloadTier = 'light';
   } else {
-    backloadTier = 'moderate'; // ambiguous default
+    backloadTier = 'moderate'; // ambiguous default — always keep an evening buffer
+  }
+
+  // Q3 rule: a breakfast-eater who ISN'T hungry at night gets an even plan (still
+  // never front-loaded — a little is saved for the evening, just in case). This
+  // catches the morning-hungry / not-night-hungry lifter who isn't already 'light'.
+  if (morningMode === 'breakfast' && a.eveningOvereat === 'no' && backloadTier === 'moderate') {
+    backloadTier = 'light';
+    notes.push('You eat in the morning but aren\'t especially hungry at night, so we keep your meals fairly even — with a little buffer saved for the evening, just in case.');
   }
 
   // --- FLAGS ---
   const flags = {
     shakePre: a.workout === 'before_first',
     shakePost: false,
-    hungryPostWorkout: a.hungryPostWorkout === 'yes',
-    shakeAnchor: morningMode === 'early_feed', // the ~10% AM protein feeding
+    hungryPostWorkout: a.hungryPostWorkout === 'yes', // R3: shake placement only, NOT backload
     cravingsSnack,                              // Stage 2 budgeted snack modifier
     dessert: a.cravings === 'wrecked',          // single-serving planned-treat prose
     alcohol: a.alcohol === 'moderate' || a.alcohol === 'daily',
@@ -577,41 +590,96 @@ function buildMealPlan(code, structure, timing = {}) {
   const heightDiff = code.height - code.weight;
 
   let calVec = CALORIE_VECTORS[direction][mealCount][tier];
-  // Even-tier ravenous override: bump the post-workout meal when it's a MIDDLE
-  // meal (otherwise the default last-meal lean already handles it).
-  if (direction === 'cut' && tier === 'light' && structure.flags?.hungryPostWorkout && EVEN_RAVENOUS_POST_CUT[mealCount]) {
-    const pwIdx = postWorkoutMealIndex(timing, mealCount);
-    if (pwIdx > 0 && pwIdx < mealCount - 1) calVec = EVEN_RAVENOUS_POST_CUT[mealCount];
+  // Breakfast mode (cut, 3-meal) uses the valley shape instead of the IF ascending one.
+  if (direction === 'cut' && structure.morningMode === 'breakfast' && CUT_BREAKFAST_VECTORS[mealCount] && CUT_BREAKFAST_VECTORS[mealCount][tier]) {
+    calVec = CUT_BREAKFAST_VECTORS[mealCount][tier];
   }
+  const isCut = direction === 'cut';
   const pW = PROTEIN_WEIGHTS[direction][mealCount][tier];
   const fW = FAT_WEIGHTS[direction][mealCount][tier];
   const fibW = FIBER_WEIGHTS[direction][mealCount][tier];
 
   let kcalArr = calVec.map((p) => (code.target * p) / 100);
-  let proteinArr = distribute(code.protein, pW);
-  let fatArr = distribute(code.fat, fW);
-  let fiberArr = distribute(code.fiber, fibW);
 
-  const FLOOR = 20;
-  for (let i = 0; i < proteinArr.length; i++) {
-    if (proteinArr[i] < FLOOR && code.protein >= FLOOR * mealCount) proteinArr[i] = FLOOR;
+  // CUT: cap the last meal (never bank an unrealistic dinner), redistribute the
+  // freed calories to the earlier meals.
+  if (isCut && mealCount >= 2) {
+    const pctCap = (LAST_MEAL_MAX_PCT[mealCount] ?? 0.5) * code.target;
+    const absCap = tier === 'heavy' ? LAST_MEAL_MAX_KCAL_HEAVY : Infinity;
+    const cap = Math.min(pctCap, absCap);
+    const last = mealCount - 1;
+    if (kcalArr[last] > cap) {
+      const excess = kcalArr[last] - cap;
+      kcalArr[last] = cap;
+      const earlierSum = kcalArr.slice(0, last).reduce((s, x) => s + x, 0) || 1;
+      for (let i = 0; i < last; i++) kcalArr[i] += excess * (kcalArr[i] / earlierSum);
+    }
   }
 
-  const meals = kcalArr.map((kcal, i) => {
-    const p = roundTo5g(proteinArr[i]);
-    const f = roundTo5g(fatArr[i]);
-    const c = Math.max(0, roundTo5g((kcal - p * 4 - f * 9) / 4));
-    const fib = roundTo5g(fiberArr[i]);
-    const band = pickDensityBand(direction, i, mealCount, tier, heightDiff);
-    return {
-      index: i,
-      kcal: roundToNearest50(p * 4 + f * 9 + c * 4),
-      protein: p, fat: f, carbs: c, fiber: fib,
-      densityBand: band,
-      pctOfDay: calVec[i],
-      isShake: false,
-    };
-  });
+  const fatArr = distribute(code.fat, fW);
+  const fiberArr = distribute(code.fiber, fibW);
+
+  let meals;
+  if (isCut) {
+    // Protein: EVEN across meals (no front-loading), floored at 20g. The per-meal
+    // cap is a structure signal (handled in selectCutStructure/shake logic); here
+    // an even split already avoids the protein "bombs".
+    const evenP = code.protein / mealCount;
+    const p = Array.from({ length: mealCount }, () => Math.max(PROTEIN_FLOOR_G, roundTo5g(evenP)));
+    // Make the served protein total match the target (absorb 5g rounding on meal 1).
+    const pDiff = roundTo5g(code.protein) - p.reduce((s, x) => s + x, 0);
+    p[0] = Math.max(PROTEIN_FLOOR_G, p[0] + pDiff);
+    // Fat: distributed by the (softened) weights, floored at 10g.
+    const f = fatArr.map((x) => Math.max(FAT_FLOOR_G, roundTo5g(x)));
+    // Carbs: the remainder, floored at 25g so no meal is supplement-only.
+    let c = kcalArr.map((kc, i) => Math.max(CARB_FLOOR_G, roundTo5g((kc - p[i] * 4 - f[i] * 9) / 4)));
+
+    // RECONCILE carbs so the day hits its CALORIE target (carbs are the remainder
+    // after protein + fat). Flooring small early meals up adds carbs; pull the
+    // surplus off the largest meal. Keeps totals on target and the dinner biggest.
+    const carbTarget = Math.max(0, Math.round((code.target - p.reduce((s, x) => s + x, 0) * 4 - f.reduce((s, x) => s + x, 0) * 9) / 4));
+    const carbTotal = () => c.reduce((s, x) => s + x, 0);
+    let guard = 0;
+    while (carbTotal() - carbTarget >= 5 && guard++ < 200) {
+      let big = 0;
+      for (let i = 1; i < mealCount; i++) if (c[i] > c[big]) big = i;
+      if (c[big] <= CARB_FLOOR_G) break;
+      c[big] -= 5;
+    }
+    guard = 0;
+    while (carbTarget - carbTotal() >= 5 && guard++ < 200) c[mealCount - 1] += 5;
+
+    meals = p.map((pp, i) => {
+      const kc = roundToNearest50(pp * 4 + f[i] * 9 + c[i] * 4);
+      return {
+        index: i,
+        kcal: kc,
+        protein: pp, fat: f[i], carbs: c[i], fiber: roundTo5g(fiberArr[i]),
+        densityBand: pickDensityBand(direction, i, mealCount, tier, heightDiff),
+        pctOfDay: Math.round((kc / code.target) * 100),
+        isShake: false,
+      };
+    });
+  } else {
+    // BULK: unchanged behavior.
+    let proteinArr = distribute(code.protein, pW);
+    for (let i = 0; i < proteinArr.length; i++) {
+      if (proteinArr[i] < PROTEIN_FLOOR_G && code.protein >= PROTEIN_FLOOR_G * mealCount) proteinArr[i] = PROTEIN_FLOOR_G;
+    }
+    meals = kcalArr.map((kcal, i) => {
+      const p = roundTo5g(proteinArr[i]);
+      const f = roundTo5g(fatArr[i]);
+      const c = Math.max(0, roundTo5g((kcal - p * 4 - f * 9) / 4));
+      return {
+        index: i,
+        kcal: roundToNearest50(p * 4 + f * 9 + c * 4),
+        protein: p, fat: f, carbs: c, fiber: roundTo5g(fiberArr[i]),
+        densityBand: pickDensityBand(direction, i, mealCount, tier, heightDiff),
+        pctOfDay: calVec[i],
+        isShake: false,
+      };
+    });
+  }
 
   // SHAKE SLOT — a single budgeted feeding, deducted from a real meal so the day
   // still sums to target. Placement: anchor (morning feeding) / pre / post.
@@ -691,8 +759,8 @@ function classifyWorkout(wake, sleep, train, trains) {
 // =====================================================
 
 const MF_SCHEMA_PREFIX = 'MF1';
-const MORNING_CODE = { if: 'IF', early_feed: 'EF', even: 'EV', light_anchor: 'LA', fasted: 'FA' };
-const MORNING_DECODE = { IF: 'if', EF: 'early_feed', EV: 'even', LA: 'light_anchor', FA: 'fasted' };
+const MORNING_CODE = { if: 'IF', breakfast: 'BF', early_feed: 'EF', even: 'EV', light_anchor: 'LA', fasted: 'FA' };
+const MORNING_DECODE = { IF: 'if', BF: 'breakfast', EF: 'early_feed', EV: 'even', LA: 'light_anchor', FA: 'fasted' };
 const CUT_TIER_CODE = { light: 'LT', moderate: 'MO', heavy: 'HV' };
 const BULK_TIER_CODE = { low: 'LO', mid: 'MD', high: 'HI' };
 const TIER_DECODE = { LT: 'light', MO: 'moderate', HV: 'heavy', LO: 'low', MD: 'mid', HI: 'high' };
@@ -780,8 +848,8 @@ function buildDescription(code, structure, p) {
   // Opening — morning
   if (mm === 'if' || mm === 'fasted') {
     lines.push(`Wake around ${minutesToClock(p.wake)}. Skip breakfast — water and 1–3 cups of black coffee carry you through the morning fast and blunt hunger until your first meal.`);
-  } else if (mm === 'early_feed') {
-    lines.push(`Wake around ${minutesToClock(p.wake)}. Start with a small, high-protein morning feeding — a protein shake/smoothie (~10% of your day's calories), or low-fat dairy and fruit. Then water and black coffee until your first full meal. This protects muscle and makes your protein target reachable without forcing huge meals later.`);
+  } else if (mm === 'breakfast') {
+    lines.push(`Wake around ${minutesToClock(p.wake)} and eat a real breakfast — protein- and fiber-forward (eggs, Greek yogurt, oats, fruit, vegetables). You're hungry in the morning, so we feed it; the day stays balanced, with a little more saved for the evening.`);
   } else if (mm === 'light_anchor') {
     lines.push(`Wake around ${minutesToClock(p.wake)}. Start with a small, high-protein, low-calorie first feeding — a protein shake/smoothie, lean meat and veg, or low-fat cheese and fruit. Keep it modest so most of your budget is saved for later.`);
   } else {
@@ -1174,10 +1242,9 @@ function buildDayEvents(structure, p, meals) {
     priorEnd = lastMealTime - 75;
   }
 
-  // First eating event by morning mode. IF and early feeding both delay the first
-  // REAL meal (the early-feed shake sits near wake; the fast runs until the first
-  // full meal). Don't start before a morning workout.
-  const delayedStart = ['fasted', 'if', 'early_feed'].includes(structure.morningMode);
+  // First eating event by morning mode. IF delays the first real meal (fast to
+  // midday); breakfast / bulk modes eat early. Don't start before a morning workout.
+  const delayedStart = (structure.morningMode === 'if' || structure.morningMode === 'fasted');
   let firstMeal = delayedStart ? wake + FIRST_MEAL_AFTER_WAKE_FASTED : wake + FIRST_MEAL_AFTER_WAKE;
   if (w.morning && trainC >= wake && trainC < firstMeal) firstMeal = Math.max(firstMeal, trainC + 45);
   if (rn > 1 && firstMeal > lastMealTime - MIN_INTER_MEAL_GAP * (rn - 1)) {
@@ -1274,7 +1341,7 @@ const ResultsScreen = ({ code, structure, personalization, plan, templateId, dec
   const isCut = code.direction === 'cut';
   const tier = isCut ? structure.backloadTier : structure.loadTier;
   const tierLabel = { light: 'Balanced', moderate: 'Moderate backload', heavy: 'Heavy backload', low: 'Low load', mid: 'Moderate load', high: 'High load' }[tier];
-  const morningLabel = { if: 'Intermittent fasting', early_feed: 'Early protein feeding', fasted: 'Fasted morning', light_anchor: 'Light start', even: 'Even meals' }[structure.morningMode];
+  const morningLabel = { if: 'Intermittent fasting', breakfast: 'Breakfast', early_feed: 'Early protein feeding', fasted: 'Fasted morning', light_anchor: 'Light start', even: 'Even meals' }[structure.morningMode];
   const prose = buildDescription(code, structure, personalization);
   const restriction = structure.flags?.restriction || ['none'];
 
