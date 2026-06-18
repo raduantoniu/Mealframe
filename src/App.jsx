@@ -493,6 +493,60 @@ function selectCutStructure(a) {
   return { morningMode, mealCount, backloadTier, flags, notes };
 }
 
+// The "see an alternative that also fits" plan. Several inputs leave a genuinely
+// open choice; this surfaces the single most relevant fork as a second option the
+// lifter can compare and pick. Priority: meal count (the classic 2-vs-3 that the
+// questions can't resolve) → breakfast-vs-IF for the "I can manage" answer →
+// biggest-meal pre- vs post-gym for late-evening trainers. Returns null when the
+// plan is well-determined. The alternative carries its own notes so the rationale
+// shown always matches the option on screen.
+function selectCutAlternative(answers, primary) {
+  const a = answers;
+  const baseNotes = (extra) => [extra, ...(primary.notes || [])];
+
+  // 1) Meal count — only when 2-vs-3 wasn't forced by a hard constraint.
+  const hardTwo = a.daytimeControl === 'none' || a.daytimeControl === 'eatout' || a.cravings === 'wrecked';
+  if (!hardTwo) {
+    const altCount = primary.mealCount === 2 ? 3 : 2;
+    const blurb = altCount < primary.mealCount
+      ? 'Fewer, bigger meals — easier if you like eating large and staying full longer between meals.'
+      : 'One more, smaller meal — easier if you prefer eating more often or find big plates a slog.';
+    return {
+      structure: { ...primary, mealCount: altCount, notes: baseNotes(blurb) },
+      primaryLabel: `${primary.mealCount} meals`,
+      label: `${altCount} meals`,
+      blurb,
+    };
+  }
+
+  // 2) Breakfast vs IF — the "I can manage" lifter is genuinely on the fence.
+  if (a.morningHunger === 'ok') {
+    const altMode = primary.morningMode === 'if' ? 'breakfast' : 'if';
+    const blurb = altMode === 'breakfast'
+      ? 'Eat a real breakfast and keep the day a touch more even — better if mornings feel off without food.'
+      : 'Push your first meal to midday and bank those calories for later — better if you fast comfortably.';
+    return {
+      structure: { ...primary, morningMode: altMode, notes: baseNotes(blurb) },
+      primaryLabel: primary.morningMode === 'if' ? 'Skip breakfast' : 'With breakfast',
+      label: altMode === 'breakfast' ? 'With breakfast' : 'Skip breakfast',
+      blurb,
+    };
+  }
+
+  // 3) Late-evening: biggest meal AFTER the gym instead of before.
+  if (primary.flags?.workout === 'evening') {
+    const blurb = 'Put your largest meal after the gym instead of before — better if a big pre-workout meal sits heavy on you.';
+    return {
+      structure: { ...primary, flags: { ...primary.flags, workout: 'midday' }, notes: baseNotes(blurb) },
+      primaryLabel: 'Big meal pre-workout',
+      label: 'Big meal post-workout',
+      blurb,
+    };
+  }
+
+  return null;
+}
+
 // =====================================================
 // BULK SELECTION ENGINE  (unchanged this round — revisit after cut is locked)
 // =====================================================
@@ -1409,26 +1463,45 @@ const TimelinePreview = ({ structure, personalization, meals }) => {
   );
 };
 
-const ResultsScreen = ({ code, structure, personalization, plan, templateId, decodedMode, onRestart, onBack }) => {
+const ResultsScreen = ({ code, structure, personalization, plan, templateId, alternative, decodedMode, onRestart, onBack }) => {
   const [copied, setCopied] = useState(false);
+  const [showAlt, setShowAlt] = useState(false);
   const isCut = code.direction === 'cut';
-  const tier = isCut ? structure.backloadTier : structure.loadTier;
-  const tierLabel = { light: 'Balanced', moderate: 'Moderate backload', heavy: 'Heavy backload', low: 'Low load', mid: 'Moderate load', high: 'High load' }[tier];
-  const morningLabel = { if: 'Intermittent fasting', breakfast: 'Breakfast', early_feed: 'Early protein feeding', fasted: 'Fasted morning', light_anchor: 'Light start', even: 'Even meals' }[structure.morningMode];
-  const prose = buildDescription(code, structure, personalization);
-  const restriction = structure.flags?.restriction || ['none'];
 
-  const goToOptiWorkout = () => window.open(`${OPTIWORKOUT_URL}?code=${encodeURIComponent(templateId)}`, '_blank');
+  // Active view: primary, or the alternative when the lifter toggles to it.
+  const active = (showAlt && alternative) ? alternative : { structure, plan, templateId };
+  const aStructure = active.structure;
+  const aPlan = active.plan;
+  const aTemplateId = active.templateId;
+
+  const tier = isCut ? aStructure.backloadTier : aStructure.loadTier;
+  const tierLabel = { light: 'Balanced', moderate: 'Moderate backload', heavy: 'Heavy backload', low: 'Low load', mid: 'Moderate load', high: 'High load' }[tier];
+  const morningLabel = { if: 'Intermittent fasting', breakfast: 'Breakfast', early_feed: 'Early protein feeding', fasted: 'Fasted morning', light_anchor: 'Light start', even: 'Even meals' }[aStructure.morningMode];
+  const prose = buildDescription(code, aStructure, personalization);
+  const restriction = aStructure.flags?.restriction || ['none'];
+
+  const goToOptiWorkout = () => window.open(`${OPTIWORKOUT_URL}?code=${encodeURIComponent(aTemplateId)}`, '_blank');
   const copyId = async () => {
-    try { await navigator.clipboard.writeText(templateId); setCopied(true); setTimeout(()=>setCopied(false),2000); } catch {}
+    try { await navigator.clipboard.writeText(aTemplateId); setCopied(true); setTimeout(()=>setCopied(false),2000); } catch {}
   };
+  const pill = (on) => `px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${on ? 'bg-stone-900 text-white' : 'text-stone-600 hover:text-stone-900'}`;
 
   return (
     <Card className="max-w-2xl">
       <BackButton onClick={onBack} />
       <span className="text-xs font-semibold text-orange-600 tracking-widest uppercase">Your Meal Structure</span>
-      <h2 className="mt-2 text-3xl font-bold text-stone-900">{structure.mealCount} meals · {isCut ? 'cutting' : 'bulking'}</h2>
+      <h2 className="mt-2 text-3xl font-bold text-stone-900">{aStructure.mealCount} meals · {isCut ? 'cutting' : 'bulking'}</h2>
       <p className="text-stone-600 mt-2 text-sm">{morningLabel} · {tierLabel} · {code.target} kcal/day</p>
+
+      {alternative && !decodedMode && (
+        <div className="mt-4">
+          <div className="inline-flex items-center rounded-full border border-stone-300 p-1 bg-stone-50">
+            <button onClick={() => setShowAlt(false)} className={pill(!showAlt)}>{alternative.primaryLabel} <span className="opacity-60">· recommended</span></button>
+            <button onClick={() => setShowAlt(true)} className={pill(showAlt)}>{alternative.label}</button>
+          </div>
+          <p className="text-xs text-stone-500 mt-2">{showAlt ? alternative.blurb : 'Both of these fit your numbers. This is the one we\'d start with — tap the other to compare.'}</p>
+        </div>
+      )}
 
       {decodedMode && (
         <p className="text-xs text-stone-500 bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 mt-3">
@@ -1436,7 +1509,7 @@ const ResultsScreen = ({ code, structure, personalization, plan, templateId, dec
         </p>
       )}
 
-      <div className="mt-5"><TimelinePreview structure={structure} personalization={personalization} meals={plan.meals} /></div>
+      <div className="mt-5"><TimelinePreview structure={aStructure} personalization={personalization} meals={aPlan.meals} /></div>
 
       <div className="mt-5 bg-orange-50 border border-orange-200 rounded-xl p-5">
         <h3 className="font-semibold text-stone-900 text-sm mb-2">How to run your day</h3>
@@ -1449,9 +1522,9 @@ const ResultsScreen = ({ code, structure, personalization, plan, templateId, dec
         <h3 className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-3">Meal-by-meal targets</h3>
         <div className="space-y-2">
           {(() => {
-            const realCount = plan.meals.filter((m) => !m.isShake).length;
+            const realCount = aPlan.meals.filter((m) => !m.isShake).length;
             let realIdx = 0;
-            return plan.meals.map((m, i) => {
+            return aPlan.meals.map((m, i) => {
               if (m.isShake) {
                 return (
                   <div key={i} className="bg-orange-50/60 border border-orange-200 rounded-xl p-4">
@@ -1470,7 +1543,7 @@ const ResultsScreen = ({ code, structure, personalization, plan, templateId, dec
                 );
               }
               const myNum = ++realIdx;
-              const slot = slotNameFor(realIdx - 1, realCount, structure.morningMode);
+              const slot = slotNameFor(realIdx - 1, realCount, aStructure.morningMode);
               const examples = matchMeals(m, slot, restriction);
               return (
                 <div key={i} className="bg-white border border-stone-200 rounded-xl p-4">
@@ -1493,11 +1566,11 @@ const ResultsScreen = ({ code, structure, personalization, plan, templateId, dec
         </div>
       </div>
 
-      {structure.notes && structure.notes.length > 0 && (
+      {aStructure.notes && aStructure.notes.length > 0 && (
         <div className="mt-4 bg-stone-50 border border-stone-200 rounded-xl p-5">
           <div className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-2">Why this structure</div>
           <ul className="space-y-1.5 text-sm text-stone-600">
-            {structure.notes.map((n, i) => <li key={i} className="flex gap-2"><Check className="w-4 h-4 text-orange-500 flex-shrink-0 mt-0.5" /><span>{n}</span></li>)}
+            {aStructure.notes.map((n, i) => <li key={i} className="flex gap-2"><Check className="w-4 h-4 text-orange-500 flex-shrink-0 mt-0.5" /><span>{n}</span></li>)}
           </ul>
         </div>
       )}
@@ -1506,7 +1579,7 @@ const ResultsScreen = ({ code, structure, personalization, plan, templateId, dec
       <div className="bg-stone-900 rounded-xl p-5 text-center">
         <h4 className="text-xs font-semibold text-orange-400 uppercase tracking-wider">Your MealFrame™ ID</h4>
         <p className="text-stone-400 text-xs mt-1">This is your structure. Paste it back into MealFrame anytime to see this page again, and give it to your coach to set up your plan in the ShredSmart app.</p>
-        <div className="mt-3 bg-stone-800 border border-stone-700 rounded-lg px-3 py-3"><code className="text-orange-300 text-xs break-all leading-relaxed">{templateId}</code></div>
+        <div className="mt-3 bg-stone-800 border border-stone-700 rounded-lg px-3 py-3"><code className="text-orange-300 text-xs break-all leading-relaxed">{aTemplateId}</code></div>
         <button onClick={copyId} className="mt-3 inline-flex items-center gap-2 bg-white text-stone-900 text-sm font-medium py-2 px-4 rounded-full hover:bg-stone-100 transition-colors"><Copy className="w-4 h-4" /> {copied ? 'Copied!' : 'Copy ID'}</button>
       </div>
 
@@ -1570,6 +1643,7 @@ export default function App() {
   const [plan, setPlan] = useState(null);
   const [personalization, setPersonalization] = useState(null);
   const [templateId, setTemplateId] = useState('');
+  const [alternative, setAlternative] = useState(null);
   const [decodedMode, setDecodedMode] = useState(false);
 
   useEffect(() => {
@@ -1593,31 +1667,42 @@ export default function App() {
     if (screen === 'loading' && code) {
       const t = setTimeout(() => {
         let struct = code.direction === 'cut' ? selectCutStructure(answers) : selectBulkStructure(answers, code);
-        const trains = struct.flags?.workout !== 'none';
-        const hungry = !!struct.flags?.hungryPostWorkout;
-        if (struct.flags?.workout === 'evening' && trains) {
-          struct = {
-            ...struct,
-            notes: [...(struct.notes || []), 'You train after your last full meal, so your biggest meal lands before the gym — about 2 hours prior, so it settles before you train — and a lighter, protein-forward meal wraps up the day afterward.'],
-          };
-        }
-        const mealPlan = buildMealPlan(code, struct, {
-          trains,
-          wake: times?.wake ?? DEFAULT_WAKE,
-          sleep: times?.sleep ?? DEFAULT_SLEEP,
-          train: trains ? (times?.train ?? DEFAULT_TRAIN) : 0,
+
+        // Derive the alternative from the BASE structure, before the late-evening
+        // note is layered on, so its notes don't inherit the primary's wording.
+        const altPick = code.direction === 'cut' ? selectCutAlternative(answers, struct) : null;
+
+        const lateNote = 'You train after your last full meal, so your biggest meal lands before the gym — about 2 hours prior, so it settles before you train — and a lighter, protein-forward meal wraps up the day afterward.';
+        const withLateNote = (s) => (s.flags?.workout === 'evening' && s.flags?.workout !== 'none')
+          ? { ...s, notes: [...(s.notes || []), lateNote] } : s;
+        struct = withLateNote(struct);
+
+        const wakeT = times?.wake ?? DEFAULT_WAKE;
+        const sleepT = times?.sleep ?? DEFAULT_SLEEP;
+        const timingFor = (s) => ({ trains: s.flags?.workout !== 'none', wake: wakeT, sleep: sleepT, train: s.flags?.workout !== 'none' ? (times?.train ?? DEFAULT_TRAIN) : 0 });
+        const persFor = (s) => ({
+          wake: wakeT, sleep: sleepT,
+          train: s.flags?.workout === 'none' ? 0 : (times?.train ?? DEFAULT_TRAIN),
+          dessert: !!s.flags?.dessert,
+          alcohol: !!s.flags?.alcohol,
+          shakePre: !!s.flags?.shakePre,
+          shakeAnchor: !!s.flags?.shakeAnchor || !!s.flags?.amProtein,
+          hungryPostWorkout: !!s.flags?.hungryPostWorkout,
         });
-        const pers = {
-          wake: times?.wake ?? DEFAULT_WAKE,
-          sleep: times?.sleep ?? DEFAULT_SLEEP,
-          train: struct.flags?.workout === 'none' ? 0 : (times?.train ?? DEFAULT_TRAIN),
-          dessert: !!struct.flags?.dessert,
-          alcohol: !!struct.flags?.alcohol,
-          shakePre: !!struct.flags?.shakePre,
-          shakeAnchor: !!struct.flags?.shakeAnchor || !!struct.flags?.amProtein,
-          hungryPostWorkout: hungry,
-        };
+
+        const mealPlan = buildMealPlan(code, struct, timingFor(struct));
+        const pers = persFor(struct);
         const id = buildTemplateId(code, struct, pers);
+
+        if (altPick) {
+          const altStruct = withLateNote(altPick.structure);
+          const altPlan = buildMealPlan(code, altStruct, timingFor(altStruct));
+          const altId = buildTemplateId(code, altStruct, persFor(altStruct));
+          setAlternative({ structure: altStruct, plan: altPlan, templateId: altId, label: altPick.label, primaryLabel: altPick.primaryLabel, blurb: altPick.blurb });
+        } else {
+          setAlternative(null);
+        }
+
         setStructure(struct); setPlan(mealPlan); setPersonalization(pers); setTemplateId(id);
         setDecodedMode(false);
         setScreen('results');
@@ -1650,6 +1735,7 @@ export default function App() {
     setCode(data.code);
     setStructure(struct2);
     setPersonalization(p);
+    setAlternative(null);
     setPlan(buildMealPlan(data.code, struct2, {
       trains: p.train > 0,
       wake: p.wake, sleep: p.sleep, train: p.train,
@@ -1662,7 +1748,7 @@ export default function App() {
   const restart = () => {
     setScreen('landing'); setCode(null); setPastedCode(''); setCodeError(null);
     setAnswers({}); setTimes(null); setStructure(null); setPlan(null); setPersonalization(null);
-    setTemplateId(''); setDecodedMode(false);
+    setTemplateId(''); setDecodedMode(false); setAlternative(null);
   };
 
   return (
@@ -1691,7 +1777,7 @@ export default function App() {
       {screen === 'loading' && <LoadingScreen />}
       {screen === 'results' && structure && plan && (
         <ResultsScreen code={code} structure={structure} personalization={personalization} plan={plan}
-          templateId={templateId} decodedMode={decodedMode}
+          templateId={templateId} alternative={alternative} decodedMode={decodedMode}
           onRestart={restart} onBack={() => setScreen(decodedMode ? 'decode_id' : 'questionnaire')} />
       )}
 
