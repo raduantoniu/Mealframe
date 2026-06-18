@@ -61,6 +61,14 @@ const CUT_BREAKFAST_VECTORS = {
   3: { light: [33, 30, 37], moderate: [33, 25, 42], heavy: [30, 22, 48] },
 };
 
+// Late-evening ("after my last meal") calorie vectors: the BIG meal sits second-
+// to-last (pre-gym) and the LAST meal is a light post-gym wrap-up. Tier doesn't
+// shift these much — the gym placement dominates the shape.
+const CUT_LATE_EVENING_VECTORS = {
+  2: [60, 40],
+  3: [33, 42, 25],
+};
+
 const PROTEIN_WEIGHTS = {
   cut: {
     // Cut protein is distributed EVENLY (the engine reads this as a fallback; the
@@ -155,10 +163,20 @@ const FIRST_MEAL_AFTER_WAKE_FASTED = 240;
 const FIRST_MEAL_AFTER_WAKE = 60;
 const INTER_MEAL_GAP = 210;
 const MIN_INTER_MEAL_GAP = 150;
+// On a long day (e.g. a 2am bedtime) the sleep-anchored last meal can sit hours
+// after a forward-spaced earlier meal. If that tail gap exceeds this, switch from
+// forward fixed-gap to even spacing so no single gap is oversized. Tuned to keep
+// the normal cases (C/J/M/D ≤7h tail) on forward spacing.
+const MAX_TAIL_GAP = 450;
 
 const POST_WORKOUT_MEAL_DELAY = 150;
 const POST_WORKOUT_LIGHT_DELAY = 90;
 const PRE_WORKOUT_MEAL_GAP = 120;
+
+// Shake / gap-bridging thresholds (minutes). A shake only ever bridges a gap.
+const SHAKE_BRIDGE_GAP = 180;     // a >3h gap to the next meal (or from the last) needs bridging
+const SHAKE_FASTED_POST_MIN = 150; // fasted + ravenous: bridge to the first meal if it's >2.5h out
+const SHAKE_ADJACENT_GAP = 90;     // a meal within 1.5h counts as "right after" — no shake needed
 
 const MORNING_TRAIN_CUTOFF = 11 * 60;
 const EVENING_TRAIN_CUTOFF = 16 * 60;
@@ -594,6 +612,14 @@ function buildMealPlan(code, structure, timing = {}) {
   if (direction === 'cut' && structure.morningMode === 'breakfast' && CUT_BREAKFAST_VECTORS[mealCount] && CUT_BREAKFAST_VECTORS[mealCount][tier]) {
     calVec = CUT_BREAKFAST_VECTORS[mealCount][tier];
   }
+  // Late-evening ("after my last meal"): big pre-gym meal, light post-gym wrap-up.
+  // Overrides the morning-mode shape — the gym placement drives the distribution.
+  const lateEveningPlan = direction === 'cut'
+    && timing && timing.trains && timing.train
+    && computeMealSchedule(structure, { wake: timing.wake, sleep: timing.sleep, train: timing.train }).lateEvening;
+  if (lateEveningPlan && CUT_LATE_EVENING_VECTORS[mealCount]) {
+    calVec = CUT_LATE_EVENING_VECTORS[mealCount];
+  }
   const isCut = direction === 'cut';
   const pW = PROTEIN_WEIGHTS[direction][mealCount][tier];
   const fW = FAT_WEIGHTS[direction][mealCount][tier];
@@ -682,32 +708,21 @@ function buildMealPlan(code, structure, timing = {}) {
   }
 
   // SHAKE SLOT — a single budgeted feeding, deducted from a real meal so the day
-  // still sums to target. Placement: anchor (morning feeding) / pre / post.
+  // still sums to target. For a cut, existence + kind come from the REAL gaps around
+  // the workout (decideCutShake); for a bulk, it's the AM protein-floor feeding.
   const fl = structure.flags || {};
-  const hungry = !!fl.hungryPostWorkout;
-  const eveningNoFit = !!timing.eveningNoFit;
 
-  let shakeKind = null;
-  let deductFrom = 'first';
-  if (fl.shakePre) {
-    shakeKind = hungry ? 'post' : 'pre';
-    deductFrom = 'first';
-  } else if (fl.shakeAnchor || fl.amProtein) {
-    shakeKind = 'anchor';
-  } else if (eveningNoFit && hungry) {
-    shakeKind = 'post';
-    deductFrom = 'last';
+  let shakeKind = null, deductIdx = 0, optional = false;
+  if (direction === 'bulk') {
+    if (fl.shakeAnchor || fl.amProtein) shakeKind = 'anchor';
+  } else {
+    const decision = decideCutShake(structure, timing);
+    if (decision) { shakeKind = decision.shakeKind; deductIdx = decision.deductIdx; optional = decision.optional; }
   }
 
   if (shakeKind && meals.length) {
-    // Early protein feeding is a bigger AM slice (~10% / ~35g); the IF morning-
-    // trainer bridge and the bulk AM floor stay at the smaller ~6% / 25g size.
-    const isEarlyFeed = direction === 'cut' && structure.morningMode === 'early_feed';
-    let shakeP, shakePct;
-    if (direction === 'bulk') { shakeP = BULK_AM_PROTEIN_FLOOR; shakePct = SHAKE_KCAL_PCT; }
-    else if (isEarlyFeed) { shakeP = EARLY_FEED_SHAKE_PROTEIN_G; shakePct = EARLY_FEED_SHAKE_PCT; }
-    else { shakeP = SHAKE_PROTEIN_G; shakePct = SHAKE_KCAL_PCT; }
-
+    const shakeP = direction === 'bulk' ? BULK_AM_PROTEIN_FLOOR : SHAKE_PROTEIN_G;
+    const shakePct = SHAKE_KCAL_PCT;
     const shakeKcalRaw = Math.max(shakeP * 4, Math.round(code.target * shakePct));
     const shakeC = Math.max(0, roundTo5g((shakeKcalRaw - shakeP * 4) / 4));
     const sp = roundTo5g(shakeP);
@@ -718,9 +733,10 @@ function buildMealPlan(code, structure, timing = {}) {
       densityBand: null,
       isShake: true,
       shakeKind,
-      optional: false,
+      optional,
     };
-    const tgt = deductFrom === 'last' ? meals[meals.length - 1] : meals[0];
+    const tgtIdx = shakeKind === 'anchor' ? 0 : Math.min(Math.max(deductIdx, 0), meals.length - 1);
+    const tgt = meals[tgtIdx];
     const tp = Math.max(0, roundTo5g(tgt.protein - shake.protein));
     const tc = Math.max(0, roundTo5g(tgt.carbs - shake.carbs));
     tgt.protein = tp; tgt.carbs = tc;
@@ -1207,73 +1223,135 @@ const LoadingScreen = () => (
   </Card>
 );
 
-// Compute the ordered day events. Placement is RELATIONAL: the last meal floats
-// off SLEEP, and an evening workout shifts where the big meal lands. Depends only
-// on tier + times, so a decoded ID reproduces the same timeline.
-function buildDayEvents(structure, p, meals) {
-  const round15 = (m) => Math.round(m / 15) * 15;
-  const events = [{ t: p.wake, icon: 'wake', label: 'Wake' }];
-  const trains = structure.flags?.workout !== 'none' && p.train > 0;
-  const realMeals = meals.filter((m) => !m.isShake);
-  const shakeMeal = meals.find((m) => m.isShake);
-  const rn = realMeals.length;
-
+// Single source of truth for meal TIMES. Both the macro engine (to decide whether
+// a shake is needed to bridge a gap) and the timeline (to place events) call this,
+// so the shake decision and the displayed schedule can never disagree. Placement is
+// RELATIONAL: the last meal floats off SLEEP; spacing is forward-fixed unless that
+// leaves an oversized tail gap (then even-spread). Depends only on structure + times,
+// so a decoded ID reproduces the same schedule.
+function computeMealSchedule(structure, p) {
   const wake = p.wake;
+  const trains = structure.flags?.workout !== 'none' && p.train > 0;
+  const rn = structure.mealCount;
   const w = classifyWorkout(wake, p.sleep, p.train, trains);
   const cont = (t) => (t < wake ? t + 1440 : t);
   const sleepC = cont(p.sleep);
   const trainC = trains ? cont(p.train) : 0;
 
+  const wk = structure.flags?.workout;
   const sleepAnchored = sleepC - LAST_MEAL_BEFORE_SLEEP;
-  let lastMealTime = sleepAnchored;
-  let priorEnd;
-  let lightAfterWorkout = false;
 
-  if (w.evening) {
-    if (w.fits) {
-      lastMealTime = trainC + POST_WORKOUT_MEAL_DELAY;
-      priorEnd = trainC - 45;
-    } else {
-      lastMealTime = Math.min(trainC - PRE_WORKOUT_MEAL_GAP, sleepAnchored);
-      priorEnd = lastMealTime - 75;
-      lightAfterWorkout = true;
-    }
-  } else {
-    priorEnd = lastMealTime - 75;
-  }
+  // "Evening, after my last meal" — trains AFTER dinner. Driven by the workout
+  // CATEGORY, not the clock: a 4pm session for a 2am sleeper is midday, not evening.
+  const lateEvening = trains && wk === 'evening';
 
-  // First eating event by morning mode. IF delays the first real meal (fast to
-  // midday); breakfast / bulk modes eat early. Don't start before a morning workout.
   const delayedStart = (structure.morningMode === 'if' || structure.morningMode === 'fasted');
   let firstMeal = delayedStart ? wake + FIRST_MEAL_AFTER_WAKE_FASTED : wake + FIRST_MEAL_AFTER_WAKE;
   if (w.morning && trainC >= wake && trainC < firstMeal) firstMeal = Math.max(firstMeal, trainC + 45);
-  if (rn > 1 && firstMeal > lastMealTime - MIN_INTER_MEAL_GAP * (rn - 1)) {
-    firstMeal = Math.max(wake + 30, lastMealTime - INTER_MEAL_GAP * (rn - 1));
+
+  let lastMealTime;
+  const mealTimes = [];
+
+  if (lateEvening) {
+    // Big meal ~2h BEFORE the gym (so it settles); a light wrap-up meal ~1.5h AFTER.
+    const bigMeal = trainC - PRE_WORKOUT_MEAL_GAP;
+    const lightMeal = Math.min(trainC + POST_WORKOUT_LIGHT_DELAY, sleepC - 30);
+    lastMealTime = lightMeal;
+    if (rn === 1) {
+      mealTimes.push(bigMeal);
+    } else {
+      let f = firstMeal;
+      if (rn > 2 && f > bigMeal - INTER_MEAL_GAP * (rn - 2)) {
+        f = Math.max(wake + 30, bigMeal - INTER_MEAL_GAP * (rn - 2));
+      }
+      for (let i = 0; i < rn - 2; i++) mealTimes.push(f + INTER_MEAL_GAP * i);
+      mealTimes.push(bigMeal);    // rn-2: big, pre-gym
+      mealTimes.push(lightMeal);  // rn-1: light, post-gym
+    }
+  } else {
+    lastMealTime = sleepAnchored;
+    if (rn > 1 && firstMeal > lastMealTime - MIN_INTER_MEAL_GAP * (rn - 1)) {
+      firstMeal = Math.max(wake + 30, lastMealTime - INTER_MEAL_GAP * (rn - 1));
+    }
+    if (rn === 1) {
+      mealTimes.push(lastMealTime);
+    } else {
+      const forwardLastNonFinal = firstMeal + INTER_MEAL_GAP * (rn - 2);
+      const roomy = forwardLastNonFinal <= lastMealTime - INTER_MEAL_GAP;
+      const forwardTail = lastMealTime - forwardLastNonFinal;
+      if (roomy && forwardTail <= MAX_TAIL_GAP) {
+        for (let i = 0; i < rn - 1; i++) mealTimes.push(firstMeal + INTER_MEAL_GAP * i);
+      } else {
+        for (let i = 0; i < rn - 1; i++) mealTimes.push(firstMeal + ((lastMealTime - firstMeal) * i) / (rn - 1));
+      }
+      mealTimes.push(lastMealTime);
+    }
   }
 
-  const mealTimes = [];
-  if (rn === 1) {
-    mealTimes.push(lastMealTime);
-  } else {
-    const forwardLastNonFinal = firstMeal + INTER_MEAL_GAP * (rn - 2);
-    if (forwardLastNonFinal <= lastMealTime - INTER_MEAL_GAP) {
-      for (let i = 0; i < rn - 1; i++) mealTimes.push(firstMeal + INTER_MEAL_GAP * i);
-    } else {
-      for (let i = 0; i < rn - 1; i++) {
-        mealTimes.push(firstMeal + ((lastMealTime - firstMeal) * i) / (rn - 1));
-      }
+  return { wake, trains, w, sleepC, trainC, rn, lastMealTime, lateEvening, firstMeal, mealTimes };
+}
+
+// Decide the cut shake from the REAL gaps around the workout (computeMealSchedule).
+// A shake exists only to bridge a gap and is never placed adjacent to a real meal.
+//   fasted into training (no meal before)  → post bridge if ravenous + a real wait,
+//                                             otherwise pre-workout fuel (optional)
+//   trains between meals, long gap AFTER    → post bridge (optional unless ravenous)
+//   trains long AFTER a meal, gap BEFORE    → pre-workout fuel (optional)
+function decideCutShake(structure, timing) {
+  const fl = structure.flags || {};
+  const hungry = !!fl.hungryPostWorkout;
+  if (!timing || !timing.trains || !timing.train) return null;
+  const sched = computeMealSchedule(structure, { wake: timing.wake, sleep: timing.sleep, train: timing.train });
+  if (sched.lateEvening) return null; // late-evening wrap-up is a real light meal, not a budgeted shake
+  const { mealTimes, trainC } = sched;
+  const beforeMeals = mealTimes.filter((t) => t <= trainC);
+  const afterMeals = mealTimes.filter((t) => t > trainC);
+  const beforeT = beforeMeals.length ? Math.max(...beforeMeals) : null;
+  const afterT = afterMeals.length ? Math.min(...afterMeals) : null;
+  const afterIdx = afterT != null ? mealTimes.indexOf(afterT) : -1;
+  const beforeIdx = beforeT != null ? mealTimes.indexOf(beforeT) : -1;
+  const preGap = beforeT != null ? trainC - beforeT : Infinity;
+  const postGap = afterT != null ? afterT - trainC : Infinity;
+
+  if (fl.shakePre || beforeT == null) {
+    // fasted into the workout
+    if (afterT != null && (hungry ? postGap > SHAKE_FASTED_POST_MIN : postGap > SHAKE_BRIDGE_GAP)) {
+      return { shakeKind: 'post', deductIdx: afterIdx, optional: !hungry };
     }
-    mealTimes.push(lastMealTime);
+    if (afterT == null || postGap > SHAKE_ADJACENT_GAP) {
+      return { shakeKind: 'pre', deductIdx: afterIdx >= 0 ? afterIdx : 0, optional: true };
+    }
+    return null; // eats right after → the meal covers it
   }
+  if (postGap > SHAKE_BRIDGE_GAP && afterT != null) {
+    return { shakeKind: 'post', deductIdx: afterIdx, optional: !hungry };
+  }
+  if (preGap > SHAKE_BRIDGE_GAP && beforeT != null) {
+    return { shakeKind: 'pre', deductIdx: beforeIdx, optional: true };
+  }
+  return null;
+}
+
+// Compute the ordered day events. Times come from computeMealSchedule so the
+// timeline matches the macro engine's shake decision exactly.
+function buildDayEvents(structure, p, meals) {
+  const round15 = (m) => Math.round(m / 15) * 15;
+  const events = [{ t: p.wake, icon: 'wake', label: 'Wake' }];
+  const realMeals = meals.filter((m) => !m.isShake);
+  const shakeMeal = meals.find((m) => m.isShake);
+
+  const sched = computeMealSchedule(structure, p);
+  const { wake, trains, trainC, sleepC, mealTimes, lateEvening } = sched;
 
   if (shakeMeal) {
     let st, label;
+    const opt = shakeMeal.optional ? ' (optional)' : '';
     if (shakeMeal.shakeKind === 'post' && trains) {
       st = trainC + POST_WORKOUT_LIGHT_DELAY;
-      label = `Post-workout shake · ${shakeMeal.kcal} kcal`;
+      label = `Post-workout shake${opt} · ${shakeMeal.kcal} kcal`;
     } else if (shakeMeal.shakeKind === 'pre' && trains) {
       st = Math.max(wake + 5, trainC - 15);
-      label = `Pre-workout shake · ${shakeMeal.kcal} kcal`;
+      label = `Pre-workout shake${opt} · ${shakeMeal.kcal} kcal`;
     } else {
       st = wake + 30;
       label = `Morning protein feeding · ${shakeMeal.kcal} kcal`;
@@ -1292,11 +1370,6 @@ function buildDayEvents(structure, p, meals) {
       sub: `${m.protein}P / ${m.carbs}C / ${m.fat}F`,
     });
   });
-
-  const hasPostShake = shakeMeal && shakeMeal.shakeKind === 'post';
-  if (lightAfterWorkout && !hasPostShake) {
-    events.push({ t: round15(trainC + POST_WORKOUT_LIGHT_DELAY), icon: 'snack', label: 'Light snack or shake (optional)', sub: 'if you\'re hungry after training' });
-  }
 
   events.push({ t: sleepC, icon: 'sleep', label: 'Sleep' });
 
@@ -1521,19 +1594,14 @@ export default function App() {
       const t = setTimeout(() => {
         let struct = code.direction === 'cut' ? selectCutStructure(answers) : selectBulkStructure(answers, code);
         const trains = struct.flags?.workout !== 'none';
-        const w = classifyWorkout(times?.wake ?? DEFAULT_WAKE, times?.sleep ?? DEFAULT_SLEEP, times?.train ?? DEFAULT_TRAIN, trains);
         const hungry = !!struct.flags?.hungryPostWorkout;
-        if (w.evening && !w.fits) {
-          const after = hungry
-            ? 'with a protein shake or light snack right after training, since you get hungry then.'
-            : 'with an optional light snack or shake after if you\'re hungry.';
+        if (struct.flags?.workout === 'evening' && trains) {
           struct = {
             ...struct,
-            notes: [...(struct.notes || []), `You train late, so a big post-workout meal wouldn't digest before bed. Your largest meal is placed before the gym — about 2 hours prior, so it settles before you train — ${after}`],
+            notes: [...(struct.notes || []), 'You train after your last full meal, so your biggest meal lands before the gym — about 2 hours prior, so it settles before you train — and a lighter, protein-forward meal wraps up the day afterward.'],
           };
         }
         const mealPlan = buildMealPlan(code, struct, {
-          eveningNoFit: w.evening && !w.fits,
           trains,
           wake: times?.wake ?? DEFAULT_WAKE,
           sleep: times?.sleep ?? DEFAULT_SLEEP,
@@ -1571,15 +1639,22 @@ export default function App() {
       },
     };
     const w = classifyWorkout(p.wake, p.sleep, p.train, p.train > 0);
+    // MF1 doesn't carry the workout category, so infer it from the clock for a
+    // decoded plan: this restores the before-first shake and late-evening template.
+    const inferredWorkout = p.train > 0
+      ? (data.structure.flags?.workout && data.structure.flags.workout !== 'varies'
+          ? data.structure.flags.workout
+          : (w.morning ? 'before_first' : (w.evening && !w.fits) ? 'evening' : 'midday'))
+      : 'none';
+    const struct2 = { ...struct, flags: { ...struct.flags, workout: inferredWorkout } };
     setCode(data.code);
-    setStructure(struct);
+    setStructure(struct2);
     setPersonalization(p);
-    setPlan(buildMealPlan(data.code, struct, {
-      eveningNoFit: w.evening && !w.fits,
+    setPlan(buildMealPlan(data.code, struct2, {
       trains: p.train > 0,
       wake: p.wake, sleep: p.sleep, train: p.train,
     }));
-    setTemplateId(buildTemplateId(data.code, struct, p));
+    setTemplateId(buildTemplateId(data.code, struct2, p));
     setDecodedMode(true);
     setScreen('results');
   };
