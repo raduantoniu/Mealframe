@@ -41,10 +41,10 @@ const hhmmToMinutes = (s) => {
 
 const CALORIE_VECTORS = {
   cut: {
-    // "light" = the even tier. NOT perfectly flat: it carries a mild backload onto
-    // the LAST meal (a little more food later in the day). The ravenous-post-workout
-    // override below can redirect that bump onto a middle meal instead.
-    2: { light: [40, 60], moderate: [38, 62], heavy: [35, 65] },
+    // 2-meal: kept EVEN (the last meal is capped at 50% — see LAST_MEAL_MAX_PCT —
+    // so two meals split ~50/50 rather than a small lunch + an oversized dinner).
+    // High-cal heavy days still first-heavy via the absolute 1,100 kcal dinner cap.
+    2: { light: [50, 50], moderate: [50, 50], heavy: [50, 50] },
     3: { light: [25, 35, 40], moderate: [25, 30, 45], heavy: [25, 28, 47] },
   },
   bulk: {
@@ -143,7 +143,7 @@ const PROTEIN_CAP_BY_MEALS = { 2: 70, 3: 55 };
 const PROTEIN_FLOOR_G = 20;
 const CARB_FLOOR_G = 25;
 const FAT_FLOOR_G = 10;
-const LAST_MEAL_MAX_PCT = { 2: 0.62, 3: 0.50 };
+const LAST_MEAL_MAX_PCT = { 2: 0.50, 3: 0.50 };
 const LAST_MEAL_MAX_KCAL_HEAVY = 1100; // heavy/social: enough to absorb a family dinner
 
 const BULK_LOAD_KCAL_PER_KG = [
@@ -638,8 +638,10 @@ function buildMealPlan(code, structure, timing = {}) {
   let kcalArr = calVec.map((p) => (code.target * p) / 100);
 
   // CUT: cap the last meal (never bank an unrealistic dinner), redistribute the
-  // freed calories to the earlier meals.
-  if (isCut && mealCount >= 2) {
+  // freed calories to the earlier meals. EXCEPTION: a pre-gym 2-meal plan's last
+  // meal IS the big pre-workout meal (the post-gym feed is a shake), so it's exempt.
+  const capLastMeal = isCut && mealCount >= 2 && !(preGymPlan && mealCount === 2);
+  if (capLastMeal) {
     const pctCap = (LAST_MEAL_MAX_PCT[mealCount] ?? 0.5) * code.target;
     const absCap = tier === 'heavy' ? LAST_MEAL_MAX_KCAL_HEAVY : Infinity;
     const cap = Math.min(pctCap, absCap);
