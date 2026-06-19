@@ -61,11 +61,11 @@ const CUT_BREAKFAST_VECTORS = {
   3: { light: [33, 30, 37], moderate: [33, 25, 42], heavy: [30, 22, 48] },
 };
 
-// Late-evening ("after my last meal") calorie vectors: the BIG meal sits second-
-// to-last (pre-gym) and the LAST meal is a light post-gym wrap-up. Tier doesn't
-// shift these much — the gym placement dominates the shape.
+// Late-evening ("after my last meal") calorie vectors. 3-meal: big meal sits
+// second-to-last (pre-gym), last meal is a light post-gym wrap-up. 2-meal: a
+// normal first meal, then the big pre-gym meal (the post-gym feed is a shake).
 const CUT_LATE_EVENING_VECTORS = {
-  2: [60, 40],
+  2: [42, 58],
   3: [33, 42, 25],
 };
 
@@ -127,8 +127,8 @@ const LEANNESS_DENSITY_MULT = [
 ];
 
 // --- SHAKE SLOT ---------------------------------------------------------------
-const SHAKE_KCAL_PCT = 0.06;            // IF morning-trainer pre/post bridge (~5-6%)
-const SHAKE_PROTEIN_G = 25;             // ~25g protein, ~110 kcal drink
+const SHAKE_PROTEIN_G = 30;             // one scoop — 30g protein
+const SHAKE_CARB_G = 5;                 // a splash of carbs (half a banana); ~140 kcal total
 const EARLY_FEED_SHAKE_PCT = 0.10;      // early protein feeding = ~10% of daily kcal
 const EARLY_FEED_SHAKE_PROTEIN_G = 35;  // protein-forward AM feeding (helps plant-based reach targets)
 const BULK_AM_PROTEIN_FLOOR = 25;       // bulk "light anchor" mandatory morning protein
@@ -156,8 +156,15 @@ const DEFAULT_WAKE = 7 * 60;
 const DEFAULT_SLEEP = 23 * 60;
 const DEFAULT_TRAIN = 18 * 60;
 
-const LAST_MEAL_BEFORE_SLEEP = 150;
+// The sleep-anchored last meal sits this far before bed. ~3.5h keeps dinner from
+// running uncomfortably late (lifters consistently prefer ~19:00-19:30 for an 11pm
+// bed). Evening-workout plans override this and anchor the last meal to the gym.
+const LAST_MEAL_BEFORE_SLEEP = 210;
 const MIN_LAST_MEAL_GAP = 120;
+// Cap on how far the pre-workout meal drifts from the previous meal, so a late
+// session (e.g. 8pm) doesn't strand a huge morning gap — past this we hold the
+// pre-workout meal earlier and bridge the rest with a pre-workout shake.
+const MAX_PRE_WORKOUT_SPREAD = 300;
 
 const FIRST_MEAL_AFTER_WAKE_FASTED = 240;
 const FIRST_MEAL_AFTER_WAKE = 60;
@@ -174,7 +181,7 @@ const POST_WORKOUT_LIGHT_DELAY = 90;
 const PRE_WORKOUT_MEAL_GAP = 120;
 
 // Shake / gap-bridging thresholds (minutes). A shake only ever bridges a gap.
-const SHAKE_BRIDGE_GAP = 180;     // a >3h gap to the next meal (or from the last) needs bridging
+const SHAKE_BRIDGE_GAP = 210;     // only a gap >3.5h needs bridging (4-5h between meals is fine)
 const SHAKE_FASTED_POST_MIN = 150; // fasted + ravenous: bridge to the first meal if it's >2.5h out
 const SHAKE_ADJACENT_GAP = 90;     // a meal within 1.5h counts as "right after" — no shake needed
 
@@ -271,18 +278,14 @@ const subBracketTierLabel = (tier, sub) => {
 // CUT question set rebuilt for the template-classifier model:
 //   REMOVED: mealCount (now diagnosed), shape (now diagnosed), snack (replaced
 //            by cravings), pastFail (orphaned; its only engine use — the
-//            evenings→moderate nudge — is now covered by the backload axis).
-//   ADDED:   satiety (primary 2-vs-3 signal), cravings (snack modifier + treat).
+//            evenings→moderate nudge — is now covered by the backload axis),
+//            satiety (orphaned once 3 meals became the universal default — its
+//            only job was the 2-vs-3 count).
+//   ADDED:   cravings (snack modifier + treat).
 //   KEPT:    morningHunger, eveningOvereat, daytimeControl, dinnerControl,
 //            workout, hungryPostWorkout, alcohol, schedule, restriction.
 
 const CUT_QUESTIONS = [
-  { id: 'satiety', q: 'After a normal-sized meal, how long does your fullness last?',
-    options: [
-      ['large','Not long — I need a big meal, or I\'m hungry again within an hour or two'],
-      ['moderate','A moderate meal keeps me full for a few hours'],
-      ['easily','I stay satisfied easily, even after smaller meals'],
-    ] },
   { id: 'morningHunger', q: 'Can you comfortably skip breakfast (water + coffee) without struggling?',
     options: [['easy','Yes, easily (no morning appetite)'],['ok','I can manage (usually eat breakfast, but can skip it)'],['hard','No, I get very hungry in the morning']] },
   { id: 'eveningOvereat', q: 'Do you tend to eat more in the evenings?',
@@ -423,24 +426,15 @@ const BULK_QUESTIONS = [
 function selectCutStructure(a) {
   const notes = [];
 
-  // --- DECISION 1: meal count (2 vs 3, default leans 3) ---
-  // Hard constraint first: no real daytime eating window OR eating out forces 2
-  // higher-density meals (no prep time; only satiating at 800-1200 kcal/meal).
-  // This overrides everything.
-  let mealCount;
-  let cravingsSnack = false;
-  if (a.daytimeControl === 'none' || a.daytimeControl === 'eatout') {
-    mealCount = 2;
-    notes.push('You don\'t have a reliable window to prep or eat during the day, so we build around 2 larger, higher-density meals instead of meals you can\'t realistically hit.');
-  } else if (a.cravings === 'wrecked') {
-    // Cravings derailed past cuts → 2 satisfying meals + a planned daily treat.
-    mealCount = 2;
-    cravingsSnack = true;
-    notes.push('Cravings have derailed past cuts, so we use 2 satisfying meals plus one planned daily treat — a structure that bends instead of breaking.');
-  } else {
-    // Can prep → satiety decides. "Need a large meal" → 2; otherwise 3.
-    // Ambiguous / unanswered → 3 (the workhorse).
-    mealCount = (a.satiety === 'large') ? 2 : 3;
+  // --- DECISION 1: meal count ---
+  // 3 meals is the universal default — it fits the great majority of lifters and
+  // satisfies satiety on its own. The 2-meal plan is always offered as the
+  // alternative (selectCutAlternative) for anyone who prefers fewer, bigger meals.
+  // Cravings that have wrecked past cuts still earn a planned daily treat.
+  const mealCount = 3;
+  const cravingsSnack = a.cravings === 'wrecked';
+  if (cravingsSnack) {
+    notes.push('Cravings have derailed past cuts, so the plan keeps one planned daily treat — a structure that bends instead of breaking.');
   }
 
   // --- DECISION 2: morning mode — IF vs breakfast ---
@@ -493,58 +487,19 @@ function selectCutStructure(a) {
   return { morningMode, mealCount, backloadTier, flags, notes };
 }
 
-// The "see an alternative that also fits" plan. Several inputs leave a genuinely
-// open choice; this surfaces the single most relevant fork as a second option the
-// lifter can compare and pick. Priority: meal count (the classic 2-vs-3 that the
-// questions can't resolve) → breakfast-vs-IF for the "I can manage" answer →
-// biggest-meal pre- vs post-gym for late-evening trainers. Returns null when the
-// plan is well-determined. The alternative carries its own notes so the rationale
-// shown always matches the option on screen.
+// The "see an alternative that also fits" plan. The recommended plan is always
+// 3 meals; the standing alternative is the same plan run as 2 larger meals, for
+// lifters who'd rather eat fewer, bigger plates. The alternative carries its own
+// lead note so the rationale on screen always matches the option shown.
 function selectCutAlternative(answers, primary) {
-  const a = answers;
-  const baseNotes = (extra) => [extra, ...(primary.notes || [])];
-
-  // 1) Meal count — only when 2-vs-3 wasn't forced by a hard constraint.
-  const hardTwo = a.daytimeControl === 'none' || a.daytimeControl === 'eatout' || a.cravings === 'wrecked';
-  if (!hardTwo) {
-    const altCount = primary.mealCount === 2 ? 3 : 2;
-    const blurb = altCount < primary.mealCount
-      ? 'Fewer, bigger meals — easier if you like eating large and staying full longer between meals.'
-      : 'One more, smaller meal — easier if you prefer eating more often or find big plates a slog.';
-    return {
-      structure: { ...primary, mealCount: altCount, notes: baseNotes(blurb) },
-      primaryLabel: `${primary.mealCount} meals`,
-      label: `${altCount} meals`,
-      blurb,
-    };
-  }
-
-  // 2) Breakfast vs IF — the "I can manage" lifter is genuinely on the fence.
-  if (a.morningHunger === 'ok') {
-    const altMode = primary.morningMode === 'if' ? 'breakfast' : 'if';
-    const blurb = altMode === 'breakfast'
-      ? 'Eat a real breakfast and keep the day a touch more even — better if mornings feel off without food.'
-      : 'Push your first meal to midday and bank those calories for later — better if you fast comfortably.';
-    return {
-      structure: { ...primary, morningMode: altMode, notes: baseNotes(blurb) },
-      primaryLabel: primary.morningMode === 'if' ? 'Skip breakfast' : 'With breakfast',
-      label: altMode === 'breakfast' ? 'With breakfast' : 'Skip breakfast',
-      blurb,
-    };
-  }
-
-  // 3) Late-evening: biggest meal AFTER the gym instead of before.
-  if (primary.flags?.workout === 'evening') {
-    const blurb = 'Put your largest meal after the gym instead of before — better if a big pre-workout meal sits heavy on you.';
-    return {
-      structure: { ...primary, flags: { ...primary.flags, workout: 'midday' }, notes: baseNotes(blurb) },
-      primaryLabel: 'Big meal pre-workout',
-      label: 'Big meal post-workout',
-      blurb,
-    };
-  }
-
-  return null;
+  if (primary.mealCount !== 3) return null; // only ever fork down to 2 off a 3-meal primary
+  const blurb = 'Two larger meals instead of three \u2014 simpler if you\'d rather eat big and go longer between meals.';
+  return {
+    structure: { ...primary, mealCount: 2, notes: [blurb, ...(primary.notes || [])] },
+    primaryLabel: '3 meals',
+    label: '2 meals',
+    blurb,
+  };
 }
 
 // =====================================================
@@ -666,12 +621,13 @@ function buildMealPlan(code, structure, timing = {}) {
   if (direction === 'cut' && structure.morningMode === 'breakfast' && CUT_BREAKFAST_VECTORS[mealCount] && CUT_BREAKFAST_VECTORS[mealCount][tier]) {
     calVec = CUT_BREAKFAST_VECTORS[mealCount][tier];
   }
-  // Late-evening ("after my last meal"): big pre-gym meal, light post-gym wrap-up.
-  // Overrides the morning-mode shape — the gym placement drives the distribution.
-  const lateEveningPlan = direction === 'cut'
+  // Big-meal-pre-gym plans (the "after my last meal" answer, or a not-night-hungry
+  // lifter whose post-workout meal would land near bed): big pre-gym meal, light
+  // post-gym. Overrides the morning-mode shape — the gym placement drives it.
+  const preGymPlan = direction === 'cut'
     && timing && timing.trains && timing.train
-    && computeMealSchedule(structure, { wake: timing.wake, sleep: timing.sleep, train: timing.train }).lateEvening;
-  if (lateEveningPlan && CUT_LATE_EVENING_VECTORS[mealCount]) {
+    && computeMealSchedule(structure, { wake: timing.wake, sleep: timing.sleep, train: timing.train }).bigMealPreGym;
+  if (preGymPlan && CUT_LATE_EVENING_VECTORS[mealCount]) {
     calVec = CUT_LATE_EVENING_VECTORS[mealCount];
   }
   const isCut = direction === 'cut';
@@ -775,11 +731,13 @@ function buildMealPlan(code, structure, timing = {}) {
   }
 
   if (shakeKind && meals.length) {
-    const shakeP = direction === 'bulk' ? BULK_AM_PROTEIN_FLOOR : SHAKE_PROTEIN_G;
-    const shakePct = SHAKE_KCAL_PCT;
-    const shakeKcalRaw = Math.max(shakeP * 4, Math.round(code.target * shakePct));
-    const shakeC = Math.max(0, roundTo5g((shakeKcalRaw - shakeP * 4) / 4));
-    const sp = roundTo5g(shakeP);
+    // Cut shake is a consistent one-scoop drink (30P / 5C). Bulk keeps its larger
+    // AM protein-floor feeding (carbs scale with the day).
+    const isBulk = direction === 'bulk';
+    const sp = roundTo5g(isBulk ? BULK_AM_PROTEIN_FLOOR : SHAKE_PROTEIN_G);
+    const shakeC = isBulk
+      ? Math.max(0, roundTo5g((Math.max(sp * 4, Math.round(code.target * 0.06)) - sp * 4) / 4))
+      : SHAKE_CARB_G;
     const shake = {
       index: -1,
       kcal: roundToNearest50(sp * 4 + shakeC * 4),
@@ -1293,36 +1251,66 @@ function computeMealSchedule(structure, p) {
   const trainC = trains ? cont(p.train) : 0;
 
   const wk = structure.flags?.workout;
-  const sleepAnchored = sleepC - LAST_MEAL_BEFORE_SLEEP;
-
-  // "Evening, after my last meal" — trains AFTER dinner. Driven by the workout
-  // CATEGORY, not the clock: a 4pm session for a 2am sleeper is midday, not evening.
-  const lateEvening = trains && wk === 'evening';
+  // Last meal sits ~3.5h before bed, widening up to ~5h for past-midnight bedtimes
+  // (a 2am sleeper shouldn't be eating dinner at 11pm just because they're up late).
+  const pastMidnight = Math.max(0, sleepC - 1440);
+  const sleepAnchored = sleepC - (LAST_MEAL_BEFORE_SLEEP + Math.min(pastMidnight, 90));
 
   const delayedStart = (structure.morningMode === 'if' || structure.morningMode === 'fasted');
   let firstMeal = delayedStart ? wake + FIRST_MEAL_AFTER_WAKE_FASTED : wake + FIRST_MEAL_AFTER_WAKE;
   if (w.morning && trainC >= wake && trainC < firstMeal) firstMeal = Math.max(firstMeal, trainC + 45);
 
+  // "Evening, after my last meal" — trains AFTER dinner. Driven by the CATEGORY.
+  const tier = structure.backloadTier;
+  const lateEveningCat = trains && wk === 'evening';
+  // Evening session (between meals, but late enough that the post-workout meal IS
+  // the last meal of the day). 3-meal only — a 2-meal day just has its dinner
+  // sleep-anchored with the gym bridged by a shake. We anchor the last meal to the
+  // gym (+90m) and frame it with a pre-workout meal (~2h before), so a meal lands
+  // near the session instead of stranding the 2nd meal early and needing a shake.
+  const eveningWorkout = trains && !lateEveningCat && rn >= 3 &&
+    (trainC + POST_WORKOUT_LIGHT_DELAY) >= (sleepAnchored - 90);
+  // Not hungry at night AND the post-workout meal would land close to bed → eat the
+  // BIG meal before the gym and keep the post-gym feed light, instead of a big late
+  // dinner. (Night-hungry lifters keep the big meal post-workout.)
+  const latePostMeal = (trainC + POST_WORKOUT_LIGHT_DELAY) >= (sleepC - 180);
+  const bigMealPreGym = lateEveningCat || (eveningWorkout && tier === 'light' && latePostMeal);
+  const lateEvening = lateEveningCat; // kept name for downstream compatibility
+
   let lastMealTime;
   const mealTimes = [];
 
-  if (lateEvening) {
-    // Big meal ~2h BEFORE the gym (so it settles); a light wrap-up meal ~1.5h AFTER.
-    const bigMeal = trainC - PRE_WORKOUT_MEAL_GAP;
-    const lightMeal = Math.min(trainC + POST_WORKOUT_LIGHT_DELAY, sleepC - 30);
-    lastMealTime = lightMeal;
+  if (bigMealPreGym) {
+    const bigMeal = trainC - PRE_WORKOUT_MEAL_GAP;                      // big meal pre-gym
+    const lightMeal = Math.min(trainC + POST_WORKOUT_LIGHT_DELAY, sleepC - 30); // wrap-up after
     if (rn === 1) {
+      lastMealTime = bigMeal;
       mealTimes.push(bigMeal);
+    } else if (rn === 2) {
+      // First meal stays at its normal time; big meal pre-gym; the post-gym feed is
+      // a shake (decideCutShake), not a delayed meal — never fast all day to the gym.
+      lastMealTime = bigMeal;
+      mealTimes.push(firstMeal, bigMeal);
     } else {
+      lastMealTime = lightMeal;
       let f = firstMeal;
-      if (rn > 2 && f > bigMeal - INTER_MEAL_GAP * (rn - 2)) {
-        f = Math.max(wake + 30, bigMeal - INTER_MEAL_GAP * (rn - 2));
-      }
+      if (f > bigMeal - INTER_MEAL_GAP * (rn - 2)) f = Math.max(wake + 30, bigMeal - INTER_MEAL_GAP * (rn - 2));
       for (let i = 0; i < rn - 2; i++) mealTimes.push(f + INTER_MEAL_GAP * i);
       mealTimes.push(bigMeal);    // rn-2: big, pre-gym
       mealTimes.push(lightMeal);  // rn-1: light, post-gym
     }
+  } else if (eveningWorkout) {
+    lastMealTime = Math.min(trainC + POST_WORKOUT_LIGHT_DELAY, sleepC - 30); // post-workout meal
+    const preMeal = Math.min(trainC - PRE_WORKOUT_MEAL_GAP, firstMeal + MAX_PRE_WORKOUT_SPREAD);
+    const earlier = rn - 2; // meals before the pre-workout meal
+    for (let i = 0; i < earlier; i++) {
+      mealTimes.push(earlier === 1 ? firstMeal : firstMeal + ((preMeal - firstMeal) * i) / earlier);
+    }
+    mealTimes.push(preMeal);      // pre-workout meal (~2h before)
+    mealTimes.push(lastMealTime); // post-workout meal (the last meal)
   } else {
+    // Early/midday workout, or no workout: forward-fixed spacing with the long-day
+    // even-spread guard; last meal sleep-anchored.
     lastMealTime = sleepAnchored;
     if (rn > 1 && firstMeal > lastMealTime - MIN_INTER_MEAL_GAP * (rn - 1)) {
       firstMeal = Math.max(wake + 30, lastMealTime - INTER_MEAL_GAP * (rn - 1));
@@ -1342,22 +1330,29 @@ function computeMealSchedule(structure, p) {
     }
   }
 
-  return { wake, trains, w, sleepC, trainC, rn, lastMealTime, lateEvening, firstMeal, mealTimes };
+  return { wake, trains, w, sleepC, trainC, rn, lastMealTime, lateEvening, eveningWorkout, bigMealPreGym, firstMeal, mealTimes };
 }
 
 // Decide the cut shake from the REAL gaps around the workout (computeMealSchedule).
-// A shake exists only to bridge a gap and is never placed adjacent to a real meal.
+// A shake only ever bridges a gap, and bridges the LONGER side: a long pre-gap means
+// the session itself needs fuel; a long post-gap means recovery needs bridging.
 //   fasted into training (no meal before)  → post bridge if ravenous + a real wait,
-//                                             otherwise pre-workout fuel (optional)
-//   trains between meals, long gap AFTER    → post bridge (optional unless ravenous)
-//   trains long AFTER a meal, gap BEFORE    → pre-workout fuel (optional)
+//                                             otherwise pre-workout fuel
+//   late-evening 2-meal                     → post-workout shake (replaces the light meal)
+//   eats before AND after                   → bridge the longer gap if it's >3.5h
 function decideCutShake(structure, timing) {
   const fl = structure.flags || {};
   const hungry = !!fl.hungryPostWorkout;
   if (!timing || !timing.trains || !timing.train) return null;
   const sched = computeMealSchedule(structure, { wake: timing.wake, sleep: timing.sleep, train: timing.train });
-  if (sched.lateEvening) return null; // late-evening wrap-up is a real light meal, not a budgeted shake
-  const { mealTimes, trainC } = sched;
+  const { mealTimes, trainC, bigMealPreGym, rn } = sched;
+
+  if (bigMealPreGym) {
+    // 3-meal has a real light post-gym meal; 2-meal swaps it for a post shake.
+    if (rn === 2) return { shakeKind: 'post', deductIdx: 1, optional: true };
+    return null;
+  }
+
   const beforeMeals = mealTimes.filter((t) => t <= trainC);
   const afterMeals = mealTimes.filter((t) => t > trainC);
   const beforeT = beforeMeals.length ? Math.max(...beforeMeals) : null;
@@ -1367,23 +1362,23 @@ function decideCutShake(structure, timing) {
   const preGap = beforeT != null ? trainC - beforeT : Infinity;
   const postGap = afterT != null ? afterT - trainC : Infinity;
 
-  if (fl.shakePre || beforeT == null) {
-    // fasted into the workout
-    if (afterT != null && (hungry ? postGap > SHAKE_FASTED_POST_MIN : postGap > SHAKE_BRIDGE_GAP)) {
-      return { shakeKind: 'post', deductIdx: afterIdx, optional: !hungry };
+  // Fasted into the workout (no meal before it).
+  if (beforeT == null) {
+    if (afterT != null && hungry && postGap > SHAKE_FASTED_POST_MIN) {
+      return { shakeKind: 'post', deductIdx: afterIdx, optional: false }; // ravenous, real wait
     }
     if (afterT == null || postGap > SHAKE_ADJACENT_GAP) {
       return { shakeKind: 'pre', deductIdx: afterIdx >= 0 ? afterIdx : 0, optional: true };
     }
-    return null; // eats right after → the meal covers it
+    return null; // eats right after → the first meal covers it
   }
-  if (postGap > SHAKE_BRIDGE_GAP && afterT != null) {
-    return { shakeKind: 'post', deductIdx: afterIdx, optional: !hungry };
-  }
-  if (preGap > SHAKE_BRIDGE_GAP && beforeT != null) {
+
+  // Eats before AND after — bridge the longer gap, but only if it's genuinely long.
+  if (Math.max(preGap, postGap) <= SHAKE_BRIDGE_GAP) return null;
+  if (preGap >= postGap) {
     return { shakeKind: 'pre', deductIdx: beforeIdx, optional: true };
   }
-  return null;
+  return { shakeKind: 'post', deductIdx: afterIdx, optional: !hungry };
 }
 
 // Compute the ordered day events. Times come from computeMealSchedule so the
