@@ -759,6 +759,45 @@ function buildMealPlan(code, structure, timing = {}) {
     else meals.unshift(shake);
   }
 
+  // 2-MEAL EVEN PASS (cut only). A 2-meal day should read as two similar meals, not
+  // a small one + a big one. The shake (if any) has already been carved out of one
+  // meal — here we pool the two real meals' served macros and re-split them evenly,
+  // so protein/carbs/fat/fiber/kcal all match across the two. This both closes the
+  // shake's protein gap (e.g. 85/55 → 70/70 + the 30g shake) and flattens the carb
+  // front-loading that the heavy tier (eat-out / no-daytime) otherwise produces.
+  // EXEMPT: the pre-gym 2-meal ("after my last meal" / late not-night-hungry), whose
+  // larger pre-gym meal is intentional.
+  if (isCut && mealCount === 2 && !preGymPlan) {
+    const reals = meals.filter((m) => !m.isShake);
+    if (reals.length === 2) {
+      // Split each macro into two ~equal halves. When a total isn't an even multiple
+      // of 10, the spare 5g goes to whichever meal is currently lighter (by running
+      // kcal), so the leftovers offset each other instead of piling onto one meal.
+      let k0 = 0, k1 = 0;
+      const split = (tot, floor, kcalPerG) => {
+        let lo = Math.max(floor, roundTo5g(tot / 2));
+        let hi = tot - lo;
+        if (hi < lo) { const t = lo; lo = hi; hi = t; }     // hi is the larger half
+        if (lo < floor) { lo = floor; hi = Math.max(floor, tot - floor); }
+        let a, b;
+        if (k0 <= k1) { a = hi; b = lo; } else { a = lo; b = hi; } // larger half → lighter meal
+        k0 += a * kcalPerG; k1 += b * kcalPerG;
+        return [a, b];
+      };
+      const [p0, p1] = split(reals[0].protein + reals[1].protein, PROTEIN_FLOOR_G, 4);
+      const [c0, c1] = split(reals[0].carbs + reals[1].carbs, CARB_FLOOR_G, 4);
+      const [f0, f1] = split(reals[0].fat + reals[1].fat, FAT_FLOOR_G, 9);
+      const [fb0, fb1] = split(reals[0].fiber + reals[1].fiber, 0, 0);
+      const apply = (m, p, c, f, fib) => {
+        m.protein = p; m.carbs = c; m.fat = f; m.fiber = fib;
+        m.kcal = roundToNearest50(p * 4 + f * 9 + c * 4);
+        m.pctOfDay = Math.round((m.kcal / code.target) * 100);
+      };
+      apply(reals[0], p0, c0, f0, fb0);
+      apply(reals[1], p1, c1, f1, fb1);
+    }
+  }
+
   return { meals, tier, mealCount };
 }
 
