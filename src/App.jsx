@@ -834,26 +834,7 @@ const CUT_TIER_CODE = { light: 'LT', moderate: 'MO', heavy: 'HV' };
 const BULK_TIER_CODE = { low: 'LO', mid: 'MD', high: 'HI' };
 const TIER_DECODE = { LT: 'light', MO: 'moderate', HV: 'heavy', LO: 'low', MD: 'mid', HI: 'high' };
 
-function encodeAnswers(answers) {
-  if (!answers) return '';
-  return Object.keys(answers)
-    .filter((k) => k !== 'restriction' && answers[k] != null && answers[k] !== '')
-    .sort()
-    .map((k) => `${k}:${answers[k]}`)
-    .join(';');
-}
-
-function decodeAnswers(s) {
-  if (!s) return null;
-  const obj = {};
-  s.split(';').forEach((pair) => {
-    const i = pair.indexOf(':');
-    if (i > 0) obj[pair.slice(0, i)] = pair.slice(i + 1);
-  });
-  return Object.keys(obj).length ? obj : null;
-}
-
-function buildTemplateId(code, structure, personalization, answers) {
+function buildTemplateId(code, structure, personalization) {
   const dir = code.direction === 'cut' ? 'C' : 'B';
   const tier = code.direction === 'cut' ? structure.backloadTier : structure.loadTier;
   const tierCode = code.direction === 'cut' ? CUT_TIER_CODE[tier] : BULK_TIER_CODE[tier];
@@ -869,15 +850,12 @@ function buildTemplateId(code, structure, personalization, answers) {
     p.shakeAnchor ? 1 : 0,
     p.hungryPostWorkout ? 1 : 0,
     (structure.flags.restriction || ['none']).join('.'),
-    encodeAnswers(answers),                 // NEW field 13
   ];
   const payload = suffixFields.join('|');
   const enc = base64urlEncode(payload);
   const ck = checksum2(`${prefix}|${payload}`);
   return `${MF_SCHEMA_PREFIX}-${prefix}-${enc}-${ck}`;
 }
-
-// Unchanged from the original EXCEPT the two lines reading field 13 (answers).
 
 function decodeTemplateId(raw) {
   if (!raw || !raw.trim()) return { ok: false, error: 'empty' };
@@ -923,9 +901,8 @@ function decodeTemplateId(raw) {
     shakePre: f[9] === '1', shakeAnchor: f[10] === '1',
     hungryPostWorkout: f[11] === '1',
   };
-  const answers = decodeAnswers(f[13]);                 // NEW: null when field absent/empty
   if (isNaN(code.target) || isNaN(mealCount)) return { ok: false, error: 'fields' };
-  return { ok: true, data: { code, structure, personalization, answers } };
+  return { ok: true, data: { code, structure, personalization } };
 }
 
 // =====================================================
@@ -990,178 +967,6 @@ function buildDescription(code, structure, p) {
   }
 
   return lines;
-}
-
-const CUT_COPY = {
-  q1: {
-    easy: `You naturally skip breakfast, so you'll use that to your advantage. Your first meal lands four to six hours after waking, around {firstMeal}. This is intermittent fasting and it is a powerful fat loss tool because it makes staying in a calorie deficit far easier. Many of the most impressive ShredSmart transformations were made possible thanks to intermittent fasting. A short morning fast blunts appetite and saves calories for later in the day, where they satisfy genuine hunger and allow flexibility for social meals. Until your first meal, drink water, black coffee, and zero-calorie drinks. Water blunts hunger, so drink it on purpose rather than waiting to feel thirsty. Fasting suppresses thirst, and you want to deliberately drink at least a liter (0.3 gallons) before you eat. Black coffee is a strong appetite suppressant. If caffeine does not affect your sleep, one to three cups across the morning, spaced a few hours apart, makes the fast effortless. Diet soda and zero-calorie energy drinks work just as well.`,
-    ok: `You can go without breakfast, so we skip it and push your first meal three to five hours after you wake, around {firstMeal}. This is intermittent fasting and it is a powerful fat loss tool because it makes staying in a calorie deficit far easier. Many of the most impressive ShredSmart transformations were made possible thanks to intermittent fasting. A short morning fast blunts appetite and saves calories for later in the day, where they satisfy genuine hunger and allow flexibility for social meals. Until your first meal, drink water, black coffee, and zero-calorie drinks. Water blunts hunger, so drink it on purpose rather than waiting to feel thirsty. Fasting suppresses thirst, and you want to deliberately drink at least a liter (0.3 gallons) before you eat. Black coffee is a strong appetite suppressant. If caffeine does not affect your sleep, one to three cups across the morning, spaced a few hours apart, makes the fast effortless. Diet soda and zero-calorie energy drinks work just as well.`,
-    hard: `You're hungry in the morning, so you eat early. The key constraint is that this can't be a typical breakfast built on carbs and fat (pancakes, eggs and bacon, peanut-butter toast, or cereal). Your first meal must include protein and fiber, the two most filling nutrients you can eat. This allows you to reach satiety on fewer calories and save a larger calorie budget for later in the day. Moreover, meeting your total daily protein target requires multiple feedings throughout the day, otherwise you'll end up needing massive protein portions later. So the recipe for your morning meal is: lean protein and high-volume, fibrous food, low on fat and carbs. The meal examples show you exactly what that looks like.`,
-  },
-  q3: {
-    cook: `You prepare and bring your own daytime meals, which is ideal for precise portions, ingredients, and tracking. That matters, because the hard part of eating away from home is finding food that is high in protein, low in calories, and still filling enough to work on a cut. Bringing your own meal in containers removes the problem. Build these meals from a lean protein source and mostly vegetables or fruit (limit carbs and fat). The best strategy is to settle on a handful of meals you enjoy and repeat them consistently. By standardizing a few favorite meals and repeating them, you eliminate daily food decisions, buy ingredients in bulk, and train your hunger signals to adjust to stable portions. Store them in your office fridge or bag (a few hours unrefrigerated will not spoil them). The meal examples give you options to start from.`,
-    eatout: `Buying your daytime meals (ordering or takeout) makes hitting high protein on low calories challenging, but it's doable with the right food choices. Order lean meat and vegetables, such as a large salad with a double portion of grilled meat or a burrito bowl with double meat, beans, and low-fat sauce. Realistically, your choices are limited. Most quick restaurant meals (sandwiches, pizza, pasta, or even standard meat-and-rice portions) overshoot your calorie target for daytime meals. Scan local menus in advance, find the few meals that actually fit your protein and calorie budget, and stick with those in rotation. Alternatively, there are catering services designed specifically for fitness enthusiasts that deliver meals built to your calorie and macro targets. This is a simple way to get "meal prepped nutrition" without cooking. That said, you should still consider prepping and bringing your own meals. You'll have full control over portions and ingredients and spend far less money on food.`,
-    none: [
-      `You're busy, and eating during the day is a struggle. There's no real lunch slot, so you either skip it or grab something quick: a sandwich, a pretzel, or something from a vending machine. On ShredSmart, that backfires twice. Skipping meals makes it almost impossible to hit your protein target, and fast-food is high in calories and low in protein. The solution is to pack your own high protein food that is easy to carry with you and can be consumed quickly. You have two options:`,
-      `1. Cook and bring your own meals in containers: Build these meals from a lean protein source and mostly vegetables or fruit (limit carbs and fat). The best strategy is to settle on a handful of meals you enjoy and repeat them consistently. By standardizing a few favorite meals and repeating them, you eliminate daily food decisions, buy ingredients in bulk, and train your hunger signals to adjust to stable portions. Store them in your office fridge or bag (a few hours unrefrigerated will not spoil them). The meal examples give you a set to start from.`,
-      `2. Rely on liquid meal replacements: protein smoothies made ahead in a sealed bottle, or single-serve meal replacement products.`,
-      `The meal examples show you options you can pack.`,
-    ],
-    wfh: `Working from home allows you to prep your meals in advance or cook fresh while weighing everything precisely and maintaining full control over the ingredients. The best strategy is to settle on a handful of meals you enjoy and repeat them consistently. Standardizing a few favorite meals allows you to eliminate daily food decisions, stock the ingredients in bulk, and train your hunger signals to adjust to stable portions. Build your meals on lean protein and veggies. This way you can hit protein, eat a large volume, and stay within the calorie budget. The meal examples provide a starting framework.`,
-  },
-  q4: {
-    control: `You control your dinner, which is the ideal situation. You choose the ingredients, set the portion, and weigh exactly what you eat. The best strategy is to settle on a few dinner options that you enjoy and eat those daily, in rotation. However, dinner is also your chance to include the foods you crave and add variety. If your earlier meals are more standardized, dinner is where you can loosen the structure and enjoy some flexibility while still staying on target.`,
-    family: [
-      `You eat dinner cooked by someone else, together with family or a partner. This is something to include into your plan, not avoid. Social eating is deeply human. While eating alone might make it easier to stay strict on your cut, it can also create social alienation, friction within the family, even resentment or tension at home. We don't want that. So we build your day around that shared dinner. Your earlier meals are higher in protein and lower in calories, which saves a large part of your daily calories (up to half) for the evening. We also deliberately program that dinner with less protein and more carbs and fat, because that's what's usually served, so it can fit a normal family dinner in normal portions.`,
-      `If the food served fits your calories but doesn't fill you up, the solution is to add food, not remove it. Reduce what's served a little bit and add a portion of plain protein on the side (extra chicken, a scoop of cottage cheese, a block of tofu) and a plate of vegetables or mushrooms. Adding food is much easier to justify socially than refusing it, and it lowers the calorie density of the meal, adds volume, and leaves you full.`,
-      `Getting the people you live with to actively support your cut is its own conversation, and it makes a big difference. See the Q&A.`,
-    ],
-    social: [
-      `You eat dinner out often, which makes hitting protein and staying within your calorie budget harder, but it's doable. There are two strategies. First, backloading: keep your earlier meals small and high in protein so you arrive at dinner with a large calorie budget, around 1000 calories. That covers most of a normal restaurant meal (a portion of pasta, a burger and fries, meat and potatoes) with some moderation. Second, order well. The best choice is lean meat with a side of potatoes or vegetables, which gives you high protein on controlled calories. But with a 1000-calorie budget, most options fit. Check the menu online before you go and decide in advance what you'll order.`,
-      `A useful side effect is that you never have to tell anyone you're cutting. Once you've decided what fits, you order it with a glass of water and nobody asks questions. If you mention you're cutting, suddenly the spotlight is on you and people start asking questions. With this strategy, you can cut without anyone noticing. (How to estimate and log a restaurant meal you didn't cook is in the Q&A.)`,
-    ],
-    varies: `Your dinner changes a lot from week to week, so we use it as the flexible part of your day instead of fighting it. Lock in your earlier meals (enough protein, controlled calories) and save a large budget, around 1000 calories, for the evening. That cushion covers almost any unexpected meal or food choice. In the long run, work toward a more predictable pattern, because the best transformations come from people who find one system and repeat it with little variation. If you want help building that structure, post in the community.`,
-  },
-  q5: {
-    fastedCalm: `You train before your first meal, and training fasted is completely fine. Almost all of your results come from three things: staying in the deficit, progressing in the gym, and hitting your daily protein. Get those right and meal timing barely matters. There is a small, optional benefit to having a protein shake before you lift, because amino acids in your blood during and after training slightly help muscle growth/retention. So if you want to optimize, have a shake before training, then eat normally at your first meal. If you'd rather train fasted, do that. The difference is small. (Why timing matters so little is in the Q&A.)`,
-    fastedRavenous: `You train before your first meal and you get hungry afterward, which makes the wait until you eat harder than it needs to be. The fix is a protein shake right after training. It bridges the gap to your first meal so you have something to digest, it's slightly better for muscle growth/retention, and it takes the edge off the hunger. After the shake, water and a cup or two of black coffee carry you to your first meal easily. You train fasted because it's the better trade for you: saving more food for the second half of the day makes the cut much easier to stick to, and that's worth more than the small cost of training fasted.`,
-    betweenNormal: `Your workout falls between two meals, which is the ideal setup. You have amino acids and glucose in your blood during the session to fuel it and support protein synthesis afterward.`,
-    lateHungry: `You train late and you're hungriest at night, after your workout, so your biggest meal goes there. This covers two things at once: your appetite after training and your natural tendency to eat more at night. It's also easier to stay disciplined earlier in the day when you know a big meal is waiting at the end. The opposite, eating most of your food by 5 or 6 PM and then staring at a nearly empty budget all evening, is what makes people go over the calorie target.`,
-    lateNotHungry: `You train late, so your biggest meal goes after work and before the gym. That's your flexible, eat-what-you-want meal, and placing it there means you're not eating a large meal right before sleep. After training, you still have a light protein meal. It helps recovery, and it closes out the day: going to bed right after a workout with nothing in you usually ends in snacking, so we schedule the meal instead of leaving it to chance.`,
-    afterLast: `You train after what you'd think of as your last meal, so we keep your big meal before the session and a light one after. The big meal goes first for two reasons: a large meal right before sleep interferes with your sleep, and going the whole day without a real meal leaves you low on energy and ravenous by the evening. So you eat your main meal, then train. The light meal afterward isn't just padding: it helps protein synthesis, and it stops the day ending on an empty stomach, which is what leads to late-night snacking. We schedule it on purpose.`,
-  },
-  q7: {
-    wrecked: [
-      `Feeling deprived of the foods you love is one of the most common reasons a cut falls apart, and it doesn't have to happen. You can keep a daily treat. The trick isn't willpower, it's controlling your food environment. If cravings have wrecked your cuts before, it usually came down to a few things: keeping trigger foods in the house, buying them in large packages, and leaving them in sight. Fix the environment and most of the willpower problem disappears.`,
-      `Buy only the amount you'll eat in one sitting, in single-serving packaging, 200 to 400 calories, and let the empty package be your signal that eating is done. Opening a second package feels different from taking more out of an open container, and that difference is what keeps the portion in check. Keep anything ready-to-eat out of sight, behind other things, hard to reach. A small obstacle between your hand and the food is often enough.`,
-      `Then give the treat a fixed spot in your day and eat it there every day, whether you feel like it or not. Removing the variability is what kills the sense of deprivation, because once the treat arrives on schedule you stop negotiating with yourself about it. Time it where the craving usually hits: mid-afternoon if that's your boredom window, or after dinner if that's when you tend to slip, taking those calories from dinner to make room. One planned treat, same spot, every day.`,
-    ],
-    manage: [
-      `You can fit any food into your diet without hurting your results, as long as you stay in your calorie budget and hit your protein. For fat loss specifically, the source of a calorie barely matters. But that's permission, not a plan: it means you can include the foods you crave, not that they should make up your diet. Keep 80 to 90% of your intake low-to-medium calorie density (vegetables, lean protein, little fat), because that's what controls hunger, performance, and adherence. Spend the rest on what you want.`,
-      `When a craving won't fit alongside your protein, you have two options: pick a higher-protein version of it, or raise the protein in your other meals to compensate. Want pizza for your third meal? Make your second meal a protein smoothie (two scoops, soy milk, a banana, around 60g of protein) and the day still balances out. The same trick saves room for a night out: shrink your earlier meals, or swap dinner for a shake, and free up 500 to 1000 calories for drinks, popcorn, or a restaurant. It's worth doing a few times a week, but not something to lean on daily.`,
-    ],
-    none: `Cravings aren't a problem for you, which is a real advantage on a cut. Not being triggered by the sight and smell of food makes everything easier. If you do want something tastier on a given day, you can: fit it into your budget, and if it's low in protein, either choose a higher-protein version or raise the protein in your other meals to compensate. The same approach frees up calories for a night out, by shrinking your earlier meals or swapping dinner for a shake. Just keep most of your food high-volume and protein-led. The treat is the exception, not the foundation.`,
-  },
-  q8: {
-    rare: `You drink occasionally, which is fine. Alcohol won't stop fat loss as long as you stay in your deficit. But it does have a real cost: alcohol is the first fuel your body burns, so it pauses fat and carb burning while it's processed, and any dietary fat you eat alongside it gets stored (if you overeat and end up in a surplus). So the strategy is to make room for alcohol. On a day you're going to drink, run your earlier meals higher in protein and fiber and lower in carbs and fat, and save a few hundred calories. Choose your drinks by calorie cost: the sweeter the drink, the more it costs, so spirits with a zero-calorie mixer go the furthest, while beer, wine, and cocktails are fine if you're drinking for the taste. One or two drinks fits a budget easily.`,
-    moderate: `A clean week undone by the weekend is the single most common reason a cut stalls, and alcohol is usually at the center of it. The math is harsh: 1000 calories over maintenance on Friday and Saturday wipes out the 500-calorie daily deficit you built from Sunday to Wednesday, leaving Thursday as your only real deficit day. That isn't enough to lose fat. To lose about a pound (0.5 kg) a week, you need roughly a 3500-calorie weekly deficit. You don't have to quit drinking, but you do have to contain it. On a day you'll drink, save the calories from your earlier meals (higher protein and fiber, lower carbs and fat) and keep it to one to three lower-calorie drinks, with spirits and a zero-calorie mixer being the most efficient. Alcohol is the first fuel your body burns, so it stalls fat-burning while it clears and stores any surplus fat you eat with it. That's the cost you're budgeting around.`,
-    daily: `Whether daily drinking breaks your plan comes down to the amount. One drink a day is fine: alcohol is 7 calories per gram, but a single drink fits easily if you pull a little carbohydrate from your meals (higher protein and fiber, lower carbs and fat, and bank the room). Two or three a day is a different story. At that amount, alcohol becomes the biggest single factor holding back your results, and the plan gets much harder than it needs to be. The honest advice is to bring it down to one drink. Not because one is off-limits, but because the deficit you're trying to maintain can't absorb more than that.`,
-  },
-  q9: {
-    consistent: `Consistency of schedule is one of the strongest predictors of a successful cut. Eating at the same times every day is, on its own, often enough to drive fat loss, and you already have that going for you. Hold the pattern MealFrame gave you (the same number of meals at roughly the same times) for the length of your diet. The occasional off day doesn't matter, but repetition should be the default.`,
-    travel: `Travel breaks the thing that makes dieting easy: a fixed schedule. There are two ways to handle it, depending on how much you travel. If it's only a day or two a week, the simplest answer is to not diet on those days. Eat at maintenance, keep your protein up with a shake or two, and accept slightly slower fat loss. Frequent maintenance days are fine. If you travel for several days in a row, you can't do that, so you plan ahead: pack protein powder, protein bars, and fruit for the trip, and rely heavily on fasting and backloading so you don't overshoot on grab-food and restaurant meals. Have small, protein-led meals early and save most of your calories for dinner, when your schedule finally settles. For meals out, use the same approach you'd use at home: check the menu in advance and pick what fits your budget.`,
-    shifts: `Shift work is hard to plan for in a general way, because the right structure depends on your specific rotation. The principle that helps most is to keep your meal times, your workout, and as much of your wake and sleep times as possible steady across both shifts, changing as little as you can. Hunger is partly trained by time: ghrelin rises around the hours you normally eat, so when your eating times move around constantly, your hunger never settles into a pattern and starts hitting at random. Find a structure that fits both rotations (same workout time, same meal times, with only wake and sleep shifting) and hold it. If you can't make it fit, post in the community and we'll build it around your rotation together.`,
-    nights: `Night shifts need an individual solution, and the honest answer is to work it out with us in the community rather than from a template. The same principle applies as with rotating shifts: anchor your structure to your wake time, wherever it falls, and treat that as your morning. Bring your situation to the community and we'll find a solution together.`,
-    erratic: `An erratic schedule is the hardest case, because stability is one of the biggest predictors of success. People who settle into a routine consistently outperform those who change their meal counts, times, and calorie distribution on a whim. The instruction is straightforward: take the pattern MealFrame gave you and hold it. The occasional change is fine, but eating the same number of meals at roughly the same times every day is what keeps the deficit going. If a fixed schedule genuinely isn't possible for you, make a community post where you detail your situation and we'll find a solution together.`,
-  },
-  q2: {
-    even: `You prepare your own food and your appetite stays steady through the day, so your meals stay about the same size. Even intake suits you well.`,
-    backloaded: `Your appetite is strongest at night, so your plan matches it: your biggest meal is the evening one. This works with your hunger instead of against it, and it's easier to stay in control earlier in the day when you know your largest meal is waiting at the end. Your earlier meals lean on protein and high-volume food to keep you comfortable until then.`,
-    buffered: `You tend to eat more at night out of habit or boredom, often in front of a screen. This habit works against the physique you want, so we redirect it rather than ban it. Your plan saves more calories for a real evening meal that satisfies the urge to eat at night. Part of that budget can go toward snacks if you need it, though the better long-term move is to spend it all on real food and let the boredom snacking fade. If the food-and-screen combination is the real anchor, keep your last meal there. Just make it the planned meal, not an open-ended graze.`,
-  },
-  combo: {
-    bothOut: `Both your daytime food and your dinner are outside your control, so your whole cut comes down to two things: making the meals you buy during the day high in protein and fiber to save calories, and spending that saved budget at dinner. Front-loading your protein is what makes this work. If you skip it, you're left needing a high-protein dinner in a social setting, which is exactly what you can't control. Get your protein in during the day, and save the carbs and the flexibility for the evening. (Your dinner section above, family or restaurant, covers how to handle the meal itself.)`,
-    hungryBoth: `You're hungry in the morning and at night, and the plan can't fully expand both ends at once. So it splits the difference: a real breakfast, a lighter middle, and your biggest meal at night, with protein spread fairly evenly across all of them. Your morning meal gets protein and volume to hold you, and your evening meal gets the size.`,
-  },
-  q10: {
-    nomeat: `You don't eat meat, so your protein comes from fish, eggs, low-fat dairy, soy, and legumes. The strategy stays the same, only the sourcing changes. Daytime meals you prep or bring should be built on those: lean fish, Greek yogurt and fruit, cottage cheese, protein oatmeal, tofu, mock meats. For dinners out, take the fish or plant options and check in advance what fits. Everything else in your plan stays the same.`,
-    vegetarian: `You eat eggs and dairy but not meat or fish, so your protein comes from low-fat cheese, eggs, soy (tofu, mock meats), and dairy. Build your daytime meals on those: protein oatmeal, Greek yogurt with fruit, cottage cheese, eggs, tofu. For dinners out, take the vegetarian or vegan options, and it's worth choosing vegetarian or vegan places in the first place, since a standard menu leaves you few choices.`,
-    vegan: [
-      `You're vegan, which changes the approach more than any other restriction, and it's one I follow myself, so the plan accounts for it properly. The main difference is that there is no separate protein source. Every food you eat has to carry a meaningful amount of protein, because your protein, carbs, and fat all come from the same foods. That makes planning essential, and it makes prepping your own food close to mandatory, especially away from home, where high-protein low-calorie vegan options barely exist. If you already cook and bring your own, keep doing exactly that. If you currently buy lunch, the honest advice is to switch to prepping, because the alternative is genuinely hard. For dinners out, confirm in advance that the place has real vegan options, otherwise you'll be left with french fries and ketchup. An occasional low-calorie dinner is fine, but you can't rely on it.`,
-      `Protein powder matters more here than on any other plan. A day that works well: fast the first few hours, then have a smoothie with a scoop and a half of plant protein, a banana, and flaxseed for fiber, which is low in calories and gives you around 45g of protein. For your second meal, a Buddha bowl (smoked tofu, green beans, carrots, lentils, hummus) for fiber and another 50g of protein. For dinner, something varied: mock meats with potatoes, lentil or chickpea pasta with plant mince and tomato sauce, or high-protein wraps. A vegan cut absolutely hits protein and holds a deficit. It just takes more planning and more attention to detail than any other version.`,
-    ],
-    pescatarian: `You eat fish but not meat, so swap every mention of lean meat for lean fish. Build your daytime meals on low-fat fish and plant protein (tofu, mock meats): tuna salad, lean fish with vegetables, protein oatmeal. For dinners out, take the fish or plant options, and fish-based or plant-forward places give you the most room.`,
-    nopork: `You don't eat pork, which has almost no effect on the plan. We simply keep pork out of your meal examples (no sausages or pork tenderloin). Everything else stays the same.`,
-    nodairy: `You don't eat dairy, so anywhere the plan leans on low-fat cheese or yogurt, your protein comes from lean meat, plant options, and protein powder instead. The structure stays the same, only the sourcing shifts.`,
-    gluten: `You avoid gluten, so the plan keeps bread and pasta out of your meals and examples. Nothing structural changes; your protein and the rest of your food stay as written.`,
-  },
-};
-
-// Fresh-run cut copy: assemble the bank from the questionnaire answers.
-function buildCutDayCopy(code, structure, personalization, answers) {
-  const a = answers || {};
-  const lines = [];
-  const restr = a.restriction || structure.flags?.restriction || ['none'];
-  const has = (x) => restr.includes(x);
-
-  // Q10 restriction preamble (top of section): one diet block + gluten if present.
-  let diet = null;
-  if (has('vegan')) diet = CUT_COPY.q10.vegan;
-  else if (has('vegetarian')) diet = [CUT_COPY.q10.vegetarian];
-  else if (has('pescatarian')) diet = [CUT_COPY.q10.pescatarian];
-  else if (has('nomeat')) diet = [CUT_COPY.q10.nomeat];
-  else if (has('nodairy')) diet = [CUT_COPY.q10.nodairy];
-  else if (has('nopork')) diet = [CUT_COPY.q10.nopork];
-  if (diet) lines.push(...diet);
-  if (has('gluten') || has('allergy')) lines.push(CUT_COPY.q10.gluten);
-
-  // Q1 morning (firstMeal token).
-  const sched = computeMealSchedule(structure, personalization);
-  const firstMeal = minutesToClock(sched.firstMeal);
-  const q1 = a.morningHunger === 'hard' ? CUT_COPY.q1.hard
-    : a.morningHunger === 'ok' ? CUT_COPY.q1.ok
-    : CUT_COPY.q1.easy;
-  lines.push(q1.replace('{firstMeal}', firstMeal));
-
-  // Combo: hungry at both ends (breakfast + hungry at night).
-  if (a.morningHunger === 'hard' && a.eveningOvereat === 'hungry') lines.push(CUT_COPY.combo.hungryBoth);
-
-  // Q3 daytime.
-  const q3 = CUT_COPY.q3[a.daytimeControl];
-  if (q3) Array.isArray(q3) ? lines.push(...q3) : lines.push(q3);
-
-  // Q4 dinner.
-  const q4 = CUT_COPY.q4[a.dinnerControl];
-  if (q4) Array.isArray(q4) ? lines.push(...q4) : lines.push(q4);
-
-  // Combo: both meals out of control.
-  const dayOut = a.daytimeControl === 'eatout' || a.daytimeControl === 'none';
-  const dinnerOut = a.dinnerControl === 'family' || a.dinnerControl === 'social';
-  if (dayOut && dinnerOut) lines.push(CUT_COPY.combo.bothOut);
-
-  // Q2 distribution line: only when daytime AND dinner are both controlled.
-  const dayControlled = a.daytimeControl === 'cook' || a.daytimeControl === 'wfh';
-  if (dayControlled && a.dinnerControl === 'control') {
-    if (a.eveningOvereat === 'no') lines.push(CUT_COPY.q2.even);
-    else if (a.eveningOvereat === 'hungry' || a.eveningOvereat === 'onlytime') lines.push(CUT_COPY.q2.backloaded);
-    else if (a.eveningOvereat === 'habit') lines.push(CUT_COPY.q2.buffered);
-  }
-
-  // Q5 training and the meal around it.
-  const hungryPost = a.hungryPostWorkout === 'yes';
-  if (a.workout === 'before_first') {
-    lines.push(hungryPost ? CUT_COPY.q5.fastedRavenous : CUT_COPY.q5.fastedCalm);
-  } else if (a.workout === 'evening') {
-    lines.push(CUT_COPY.q5.afterLast);
-  } else if (a.workout === 'midday') {
-    if (sched.eveningWorkout && sched.bigMealPreGym) lines.push(CUT_COPY.q5.lateNotHungry);
-    else if (sched.eveningWorkout) lines.push(CUT_COPY.q5.lateHungry);
-    else lines.push(CUT_COPY.q5.betweenNormal);
-  }
-
-  // Q7 cravings.
-  const q7 = a.cravings === 'wrecked' ? CUT_COPY.q7.wrecked
-    : a.cravings === 'manage' ? CUT_COPY.q7.manage
-    : a.cravings === 'none' ? CUT_COPY.q7.none : null;
-  if (q7) Array.isArray(q7) ? lines.push(...q7) : lines.push(q7);
-
-  // Q8 alcohol (none is suppressed).
-  if (a.alcohol === 'rare') lines.push(CUT_COPY.q8.rare);
-  else if (a.alcohol === 'moderate') lines.push(CUT_COPY.q8.moderate);
-  else if (a.alcohol === 'daily') lines.push(CUT_COPY.q8.daily);
-
-  // Q9 schedule.
-  const q9 = CUT_COPY.q9[a.schedule];
-  if (q9) lines.push(q9);
-
-  return lines;
-}
-
-function buildDayCopy(code, structure, personalization, answers) {
-  if (code.direction === 'cut' && answers && answers.morningHunger) {
-    return buildCutDayCopy(code, structure, personalization, answers);
-  }
-  return buildDescription(code, structure, personalization);
 }
 
 // =====================================================
@@ -1494,15 +1299,7 @@ function computeMealSchedule(structure, p) {
 
   const delayedStart = (structure.morningMode === 'if' || structure.morningMode === 'fasted');
   let firstMeal = delayedStart ? wake + FIRST_MEAL_AFTER_WAKE_FASTED : wake + FIRST_MEAL_AFTER_WAKE;
-  if (trains && wk === 'before_first' && w.morning) {
-    // Trains before the first meal: that first meal IS the post-workout meal, so
-    // anchor it just after the session instead of letting it land on (or before)
-    // the workout. Keeping it adjacent means the meal itself covers recovery, so
-    // decideCutShake won't insert a bridging shake.
-    firstMeal = Math.max(wake + FIRST_MEAL_AFTER_WAKE, trainC + POST_WORKOUT_LIGHT_DELAY);
-  } else if (w.morning && trainC >= wake && trainC < firstMeal) {
-    firstMeal = Math.max(firstMeal, trainC + 45);
-  }
+  if (w.morning && trainC >= wake && trainC < firstMeal) firstMeal = Math.max(firstMeal, trainC + 45);
 
   // "Evening, after my last meal" — trains AFTER dinner. Driven by the CATEGORY.
   const tier = structure.backloadTier;
@@ -1678,156 +1475,22 @@ const ShakeIcon = ({ className }) => (
   </svg>
 );
 
-const PillowIcon = ({ className }) => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <path d="M3 9c0-1.7 1.3-3 3-3h12c1.7 0 3 1.3 3 3v6c0 1.7-1.3 3-3 3H6c-1.7 0-3-1.3-3-3z" />
-    <path d="M7 9.5c2-1 8-1 10 0" />
-  </svg>
-);
-
-// Vertical day timeline. Not to scale (gaps aren't proportional) — it lists the
-// day's events top to bottom for clarity, with the time on the LEFT of the rail.
-// The morning fast (IF mornings) and the ~1.5h workout are tinted on the rail.
-// Geometry is done with inline styles (not Tailwind arbitrary classes) so it
-// renders identically regardless of the Tailwind build. Same props as before;
-// reads buildDayEvents() unchanged.
 const TimelinePreview = ({ structure, personalization, meals }) => {
   const events = buildDayEvents(structure, personalization, meals);
-  if (!events.length) return null;
-
-  const realMeals = meals.filter((m) => !m.isShake);
-  const shakeMeal = meals.find((m) => m.isShake);
-  const maxKcal = Math.max(...realMeals.map((m) => m.kcal), 0);
-
-  const isFasted = structure.morningMode === 'if' || structure.morningMode === 'fasted';
-  const firstFoodIdx = events.findIndex((e) => e.icon === 'meal' || e.icon === 'shake' || e.icon === 'snack');
-  const trainIdx = events.findIndex((e) => e.icon === 'train');
-
-  // Render rows = the events, plus a "morning fast" band-row before the first
-  // food on fasted mornings.
-  const rows = [];
-  events.forEach((e, i) => {
-    if (isFasted && i === firstFoodIdx && firstFoodIdx > 0) {
-      const mins = events[firstFoodIdx].t - events[0].t;
-      const h = Math.floor(mins / 60), mm = mins % 60;
-      rows.push({ type: 'fast', dur: mm === 0 ? `${h} h` : `${h} h ${mm} min` });
-    }
-    rows.push({ type: 'event', e, i });
-  });
-
-  // Tinted band per row: 'full' | 'top' (upper half) | 'bottom' (lower half) | null.
-  const bandFor = (row) => {
-    if (row.type === 'fast') return 'full';
-    if (row.type !== 'event') return null;
-    const ei = row.i;
-    if (isFasted && firstFoodIdx > 0) {
-      if (ei === 0) return 'bottom';
-      if (ei === firstFoodIdx) return 'top';
-    }
-    if (trainIdx >= 0) {
-      if (ei === trainIdx) return 'bottom';
-      if (ei === trainIdx + 1) return 'top';
-    }
-    return null;
-  };
-
-  const NODE = {
-    wake: { Icon: PillowIcon, accent: false },
-    meal: { Icon: UtensilsCrossed, accent: true },
-    train: { Icon: Dumbbell, accent: false },
-    shake: { Icon: ShakeIcon, accent: false },
-    snack: { Icon: ShakeIcon, accent: false },
-    sleep: { Icon: Moon, accent: false },
-  };
-
-  const ROW = { display: 'grid', gridTemplateColumns: '46px 34px 1fr', alignItems: 'center', columnGap: '10px' };
-  const railCell = { position: 'relative', alignSelf: 'stretch', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 40 };
-  const seg = (pos) => pos === 'full' ? { top: 0, bottom: 0 } : pos === 'bottom' ? { top: '50%', bottom: 0 } : { top: 0, bottom: '50%' };
-  const lineSeg = (ri) => ri === 0 ? { top: '50%', bottom: 0 } : ri === rows.length - 1 ? { top: 0, bottom: '50%' } : { top: 0, bottom: 0 };
-  const cardWrap = { justifySelf: 'start', display: 'inline-flex', flexDirection: 'column', margin: '5px 0' };
-
-  let realCursor = 0;
-
+  const Icon = { wake: Coffee, meal: UtensilsCrossed, train: Dumbbell, sleep: Moon, shake: ShakeIcon, snack: ShakeIcon };
   return (
-    <div className="bg-stone-50 border border-stone-200 rounded-xl p-4 sm:p-5">
-      <div className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-3 flex items-center gap-2"><Clock className="w-3.5 h-3.5" /> Your day</div>
-      <div>
-        {rows.map((row, ri) => {
-          const band = bandFor(row);
-          const rail = (
-            <div style={railCell}>
-              <div className="bg-stone-200" style={{ position: 'absolute', left: 16, width: 2, ...lineSeg(ri) }} />
-              {band && <div className="bg-orange-300" style={{ position: 'absolute', left: 16, width: 2, ...seg(band) }} />}
-              {row.type === 'event' && (() => {
-                const cfg = NODE[row.e.icon] || NODE.meal;
-                const I = cfg.Icon;
-                return (
-                  <div className={cfg.accent ? 'bg-orange-100 text-orange-600' : 'bg-white border border-stone-300 text-stone-500'}
-                    style={{ position: 'relative', zIndex: 10, width: 34, height: 34, borderRadius: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <span style={{ width: 18, height: 18, display: 'inline-flex' }}><I className="w-full h-full" /></span>
-                  </div>
-                );
-              })()}
-            </div>
-          );
-
-          if (row.type === 'fast') {
-            return (
-              <div key={ri} style={ROW}>
-                <div />
-                {rail}
-                <div className="rounded-xl border-2 border-dashed border-orange-300 bg-orange-50 px-3 py-2" style={cardWrap}>
-                  <div className="text-xs font-medium text-orange-700">Morning fast <span className="text-orange-400 font-normal">· {row.dur}</span></div>
-                  <div className="text-xs text-stone-500">Water, black coffee, zero-calorie drinks</div>
-                </div>
-              </div>
-            );
-          }
-
-          const e = row.e;
-          const isPlain = e.icon === 'wake' || e.icon === 'train' || e.icon === 'sleep';
-
-          let card;
-          if (isPlain) {
-            card = (
-              <div className="text-sm font-medium text-stone-900" style={{ justifySelf: 'start' }}>
-                {e.label}{e.icon === 'train' && <span className="text-stone-400 font-normal text-xs"> · 1.5 h</span>}
-              </div>
-            );
-          } else {
-            let m, title, tag = null;
-            if (e.icon === 'meal') {
-              m = realMeals[realCursor]; realCursor += 1;
-              const isLast = realCursor === realMeals.length;
-              const biggest = m && m.kcal === maxKcal;
-              title = `Meal ${realCursor}`;
-              if (isLast && biggest) tag = 'dinner, biggest';
-              else if (isLast) tag = 'dinner';
-              else if (biggest) tag = 'biggest';
-            } else {
-              m = shakeMeal;
-              title = e.icon === 'snack' ? 'Snack'
-                : (m && m.shakeKind === 'pre') ? 'Pre-workout shake'
-                : (m && m.shakeKind === 'post') ? 'Post-workout shake'
-                : (m && m.shakeKind === 'anchor') ? 'Morning protein feeding'
-                : 'Protein shake';
-              if (m && m.optional) tag = 'optional';
-            }
-            const kcal = m ? m.kcal : 0;
-            card = (
-              <div className="rounded-xl border border-stone-200 bg-white px-3 py-2" style={cardWrap}>
-                <div className="text-xs text-stone-500">{title}{tag && <span className="text-stone-400"> · {tag}</span>}</div>
-                <div className="text-xl font-semibold text-stone-900 leading-tight">{kcal} kcal</div>
-                {m && <div className="text-xs text-stone-500">{m.protein}P · {m.carbs}C · {m.fat}F</div>}
-              </div>
-            );
-          }
-
+    <div className="bg-stone-50 border border-stone-200 rounded-xl p-5">
+      <div className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-3 flex items-center gap-2"><Clock className="w-3.5 h-3.5" /> Your day (preview — visual timeline coming soon)</div>
+      <div className="space-y-2">
+        {events.map((e, i) => {
+          const I = Icon[e.icon];
+          const isMeal = e.icon === 'meal';
+          const isLight = e.icon === 'shake' || e.icon === 'snack';
           return (
-            <div key={ri} style={ROW}>
-              <div className="text-xs text-stone-400 tabular-nums" style={{ justifySelf: 'end' }}>{minutesToClock(e.t)}</div>
-              {rail}
-              {card}
+            <div key={i} className="flex items-center gap-3 text-sm">
+              <div className="w-16 text-stone-500 tabular-nums">{minutesToClock(e.t)}</div>
+              <div className={`w-7 h-7 rounded-full flex items-center justify-center ${isMeal ? 'bg-orange-100 text-orange-600' : isLight ? 'bg-orange-50 text-orange-500' : 'bg-stone-200 text-stone-600'}`}><I className="w-4 h-4" /></div>
+              <div><div className="font-medium text-stone-900">{e.label}</div>{e.sub && <div className="text-xs text-stone-500">{e.sub}</div>}</div>
             </div>
           );
         })}
@@ -1836,8 +1499,7 @@ const TimelinePreview = ({ structure, personalization, meals }) => {
   );
 };
 
-
-const ResultsScreen = ({ code, structure, personalization, plan, templateId, alternative, decodedMode, answers, onRestart, onBack }) => {
+const ResultsScreen = ({ code, structure, personalization, plan, templateId, alternative, decodedMode, onRestart, onBack }) => {
   const [copied, setCopied] = useState(false);
   const [showAlt, setShowAlt] = useState(false);
   const isCut = code.direction === 'cut';
@@ -1851,7 +1513,7 @@ const ResultsScreen = ({ code, structure, personalization, plan, templateId, alt
   const tier = isCut ? aStructure.backloadTier : aStructure.loadTier;
   const tierLabel = { light: 'Balanced', moderate: 'Moderate backload', heavy: 'Heavy backload', low: 'Low load', mid: 'Moderate load', high: 'High load' }[tier];
   const morningLabel = { if: 'Intermittent fasting', breakfast: 'Breakfast', early_feed: 'Early protein feeding', fasted: 'Fasted morning', light_anchor: 'Light start', even: 'Even meals' }[aStructure.morningMode];
-  const prose = buildDayCopy(code, aStructure, personalization, answers);
+  const prose = buildDescription(code, aStructure, personalization);
   const restriction = aStructure.flags?.restriction || ['none'];
 
   const goToOptiWorkout = () => window.open(`${OPTIWORKOUT_URL}?code=${encodeURIComponent(aTemplateId)}`, '_blank');
@@ -2066,12 +1728,12 @@ export default function App() {
 
         const mealPlan = buildMealPlan(code, struct, timingFor(struct));
         const pers = persFor(struct);
-        const id = buildTemplateId(code, struct, pers, answers);
+        const id = buildTemplateId(code, struct, pers);
 
         if (altPick) {
           const altStruct = withLateNote(altPick.structure);
           const altPlan = buildMealPlan(code, altStruct, timingFor(altStruct));
-          const altId = buildTemplateId(code, altStruct, persFor(altStruct), answers);
+          const altId = buildTemplateId(code, altStruct, persFor(altStruct));
           setAlternative({ structure: altStruct, plan: altPlan, templateId: altId, label: altPick.label, primaryLabel: altPick.primaryLabel, blurb: altPick.blurb });
         } else {
           setAlternative(null);
@@ -2087,40 +1749,34 @@ export default function App() {
 
   const loadFromId = (data) => {
     const p = data.personalization || {};
-    const decoded = data.answers || null;
     const struct = {
       ...data.structure,
       flags: {
         ...(data.structure.flags || {}),
-        hungryPostWorkout: decoded ? decoded.hungryPostWorkout === 'yes' : !!p.hungryPostWorkout,
+        hungryPostWorkout: !!p.hungryPostWorkout,
         shakePre: !!p.shakePre,
         shakeAnchor: !!p.shakeAnchor,
         workout: p.train > 0 ? (data.structure.flags?.workout || 'varies') : 'none',
       },
     };
     const w = classifyWorkout(p.wake, p.sleep, p.train, p.train > 0);
-    // Prefer the decoded workout answer (exact); fall back to the clock inference
-    // only when the ID carries no answers (legacy/partial code).
+    // MF1 doesn't carry the workout category, so infer it from the clock for a
+    // decoded plan: this restores the before-first shake and late-evening template.
     const inferredWorkout = p.train > 0
-      ? (decoded?.workout
-          || (data.structure.flags?.workout && data.structure.flags.workout !== 'varies'
-              ? data.structure.flags.workout
-              : (w.morning ? 'before_first' : (w.evening && !w.fits) ? 'evening' : 'midday')))
+      ? (data.structure.flags?.workout && data.structure.flags.workout !== 'varies'
+          ? data.structure.flags.workout
+          : (w.morning ? 'before_first' : (w.evening && !w.fits) ? 'evening' : 'midday'))
       : 'none';
     const struct2 = { ...struct, flags: { ...struct.flags, workout: inferredWorkout } };
-    const fullAnswers = decoded
-      ? { ...decoded, restriction: struct2.flags?.restriction || ['none'] }
-      : null;
     setCode(data.code);
     setStructure(struct2);
     setPersonalization(p);
-    setAnswers(fullAnswers || {});
     setAlternative(null);
     setPlan(buildMealPlan(data.code, struct2, {
       trains: p.train > 0,
       wake: p.wake, sleep: p.sleep, train: p.train,
     }));
-    setTemplateId(buildTemplateId(data.code, struct2, p, fullAnswers));
+    setTemplateId(buildTemplateId(data.code, struct2, p));
     setDecodedMode(true);
     setScreen('results');
   };
@@ -2158,7 +1814,6 @@ export default function App() {
       {screen === 'results' && structure && plan && (
         <ResultsScreen code={code} structure={structure} personalization={personalization} plan={plan}
           templateId={templateId} alternative={alternative} decodedMode={decodedMode}
-          answers={answers}
           onRestart={restart} onBack={() => setScreen(decodedMode ? 'decode_id' : 'questionnaire')} />
       )}
 
