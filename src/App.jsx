@@ -1887,6 +1887,15 @@ const ResultsScreen = ({ code, structure, personalization, plan, templateId, alt
 
       <div className="mt-5"><TimelinePreview structure={aStructure} personalization={personalization} meals={aPlan.meals} /></div>
 
+      {aStructure.notes && aStructure.notes.length > 0 && (
+        <div className="mt-5 bg-stone-50 border border-stone-200 rounded-xl p-5">
+          <div className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-2">Why this structure</div>
+          <ul className="space-y-1.5 text-sm text-stone-600">
+            {aStructure.notes.map((n, i) => <li key={i} className="flex gap-2"><Check className="w-4 h-4 text-orange-500 flex-shrink-0 mt-0.5" /><span>{n}</span></li>)}
+          </ul>
+        </div>
+      )}
+
       <div className="mt-5 bg-orange-50 border border-orange-200 rounded-xl p-5">
         <h3 className="font-semibold text-stone-900 text-sm mb-2">How to run your day</h3>
         <div className="space-y-2 text-sm text-stone-700 leading-relaxed">
@@ -1941,15 +1950,6 @@ const ResultsScreen = ({ code, structure, personalization, plan, templateId, alt
           })()}
         </div>
       </div>
-
-      {aStructure.notes && aStructure.notes.length > 0 && (
-        <div className="mt-4 bg-stone-50 border border-stone-200 rounded-xl p-5">
-          <div className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-2">Why this structure</div>
-          <ul className="space-y-1.5 text-sm text-stone-600">
-            {aStructure.notes.map((n, i) => <li key={i} className="flex gap-2"><Check className="w-4 h-4 text-orange-500 flex-shrink-0 mt-0.5" /><span>{n}</span></li>)}
-          </ul>
-        </div>
-      )}
 
       <div className="border-t border-stone-200 my-6"></div>
       <div className="bg-stone-900 rounded-xl p-5 text-center">
