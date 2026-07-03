@@ -2037,6 +2037,19 @@ function computeMealSchedule(structure, p) {
       }
       mealTimes.push(lastMealTime);
     }
+    // A midday session isn't used to anchor meals (unlike the morning/evening
+    // branches), so forward/even spacing can drop a meal inside the ~90-min
+    // workout. Move any meal that lands during the session to when it ends, then
+    // keep the list ordered. (No-op for early/no-workout days.)
+    if (trains && !w.morning && !w.evening) {
+      const wEnd = trainC + POST_WORKOUT_LIGHT_DELAY;
+      for (let i = 0; i < mealTimes.length; i++) {
+        if (mealTimes[i] > trainC && mealTimes[i] < wEnd) mealTimes[i] = wEnd;
+      }
+      for (let i = 1; i < mealTimes.length; i++) {
+        if (mealTimes[i] < mealTimes[i - 1]) mealTimes[i] = mealTimes[i - 1];
+      }
+    }
   }
 
   return { wake, trains, w, sleepC, trainC, rn, lastMealTime, lateEvening, eveningWorkout, bigMealPreGym, firstMeal, mealTimes };
