@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ArrowRight, ArrowLeft, Check, Loader2, ChevronDown, ChevronUp, ExternalLink, AlertTriangle, Copy, Clock, Dumbbell, Moon, Coffee, UtensilsCrossed, AlarmClock } from 'lucide-react';
 
 // =====================================================
@@ -1165,39 +1165,504 @@ function buildDayCopy(code, structure, personalization, answers) {
 }
 
 // =====================================================
-// SEED MEAL LIBRARY (tiny — full tagged library + photos arrive in Artifact B)
+// MEAL LIBRARY + SOLVER + RECIPES + CAROUSEL SELECTION
+// Macros are source of truth; energy = 4/9/4 with fiber at 2 kcal/g. Solver scales
+// each meal to the slot targets (as-written when it already fits); selection builds
+// 4 options/slot (>=1 vegan, protein-type balanced, no animal/plant variant pair
+// together, MRs gated+capped, starch only for higher-cal/even slots). STEPS holds
+// the recipe per meal id; images at /meals/<id>.jpg.
 // =====================================================
 
-const SEED_LIBRARY = [
-  { name: 'Tofu scramble + mushrooms', slot: ['early','mid'], kcal: 580, p: 48, f: 27, c: 44, g: 520, pal: 'enjoyable', diet: ['vegan','vegetarian','nomeat','none'] },
-  { name: 'Burrito bowl (plant mince + veg)', slot: ['early','mid'], kcal: 660, p: 45, f: 27, c: 59, g: 650, pal: 'enjoyable', diet: ['vegan','vegetarian','nomeat','none'] },
-  { name: 'Chicken, veg & potatoes', slot: ['early','mid','dinner'], kcal: 620, p: 55, f: 18, c: 60, g: 600, pal: 'enjoyable', diet: ['none','nopork','pescatarian'] },
-  { name: 'Protein smoothie', slot: ['anchor'], kcal: 300, p: 35, f: 6, c: 28, g: 400, pal: 'enjoyable', diet: ['vegan','vegetarian','nomeat','none'], liquid: true },
-  { name: 'Lean meat wraps + veg', slot: ['dinner'], kcal: 830, p: 54, f: 22, c: 110, g: 700, pal: 'enjoyable', diet: ['none','nopork'] },
-  { name: 'Veggie burgers + side veg', slot: ['dinner'], kcal: 740, p: 43, f: 21, c: 109, g: 650, pal: 'hyperpalatable', diet: ['vegan','vegetarian','nomeat','none'] },
-  { name: 'Family pasta (lean meat + sauce)', slot: ['dinner'], kcal: 900, p: 50, f: 26, c: 120, g: 550, pal: 'hyperpalatable', diet: ['none','nopork','vegetarian'] },
+// MealFrame meal library. Macros are the source of truth; energy is computed
+// (4/9/4, fiber at 2 kcal/g). Ingredient roles: P=protein group, S=starch/energy
+// lever, X=side (scales a little with meal size). diet = what the meal CONTAINS.
+// band = the calorie range Radu wrote it for. mr = meal replacement. vg = variant
+// group (animal/plant pair that must never appear together in one plan).
+// ing tuple: [name, grams, protein, fat, carbs, fiber, role]
+
+const MEALS = [
+  // ---------------- MEAL REPLACEMENTS ----------------
+  { id:'huel', name:'Meal Replacement Product', band:[100,500], mr:true, vg:null,
+    diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:0},
+    ings:[['Huel Black two scoops',90,40,17,28,11,'P']] },
+  { id:'shake_fruit', name:'Protein Shake & Fruit', band:[100,500], mr:true, vg:null,
+    diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:0},
+    ings:[['Protein powder',60,47,1,1.9,0,'P'],['Large bananas (x2)',270,3,0.9,55,7,'X']] },
+  { id:'bars_fruit', name:'Protein Bars & Fruit', band:[100,500], mr:true, vg:null,
+    diet:{meat:0,pork:0,fish:0,dairy:1,egg:0,gluten:0},
+    ings:[['Quest bars (x2)',120,40,18,24,22,'P'],['Large apples (x2)',420,1.1,0.7,48,10,'X']] },
+
+  // ---------------- DAYTIME / LEAN (300-700) ----------------
+  { id:'chicken_fajitas', name:'Chicken Fajitas', band:[300,700], mr:false, vg:null,
+    diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:0},
+    ings:[['Chicken breast',225,45,6.8,0,0,'P'],['Onion',250,2.8,0.2,19,4.2,'X'],['Bell pepper',250,2.5,0.8,9.8,5.2,'X'],['Oil',10,0,10,0,0,'X'],['Hot salsa',100,1.5,0.2,4.7,1.9,'X']] },
+  { id:'chicken_peas', name:'Chicken & Peas Skillet', band:[300,700], mr:false, vg:null,
+    diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:0},
+    ings:[['Chicken thighs',200,40,8.2,0,0,'P'],['Frozen peas',200,10.4,0.8,18.2,9,'X'],['Carrots',200,1.8,0.4,13.6,5.6,'X']] },
+  { id:'chicken_greenbeans', name:'Chicken & Green Beans Skillet', band:[300,700], mr:false, vg:null,
+    diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:0},
+    ings:[['Chicken thighs',200,40,8.2,0,0,'P'],['Frozen green beans',200,3.6,0.4,8.6,5.4,'X'],['Carrots',200,1.8,0.4,13.6,5.6,'X']] },
+  { id:'burrito_sm', name:'Burrito Bowl', band:[300,700], mr:false, vg:null,
+    diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:0},
+    ings:[['Lean ground meat',200,42,14.2,0,0,'P'],['Kidney beans',120,9.6,1.3,19,6.6,'X'],['Onion',100,1.1,0.1,7.6,1.7,'X'],['Bell pepper',100,1,0.3,3.9,2.1,'X'],['Oil',10,0,10,0,0,'X'],['Hot salsa',100,1.5,0.2,4.7,1.9,'X']] },
+  { id:'tuna_salad', name:'Tuna Salad', band:[300,700], mr:false, vg:null,
+    diet:{meat:0,pork:0,fish:1,dairy:1,egg:0,gluten:0},
+    ings:[['Tuna (drained)',130,25,1.3,0,0,'P'],['Greek yogurt',150,13.5,7.5,6,0,'P'],['Iceberg lettuce',125,1.1,0.2,2.2,1.5,'X'],['Red onion',100,1.1,0.1,7.6,1.7,'X'],['Green olives',25,0.2,4,0.1,0.8,'X'],['Cherry tomato',100,0.9,0.2,2.7,1.2,'X'],['Mustard',20,0.7,0.7,0.4,0.8,'X']] },
+  { id:'tuna_stirfry', name:'Tuna Skillet Stir-Fry', band:[300,700], mr:false, vg:null,
+    diet:{meat:0,pork:0,fish:1,dairy:0,egg:1,gluten:0},
+    ings:[['Tuna (drained)',130,25,1.3,0,0,'P'],['Large eggs (x2)',100,12,10,0,0,'P'],['Frozen veg mix',250,7.8,1.2,32,10.7,'X'],['Oil',10,0,10,0,0,'X']] },
+  { id:'yogurt_mixfruit', name:'Greek Yogurt & Mixed Fruit', band:[300,700], mr:false, vg:null,
+    diet:{meat:0,pork:0,fish:0,dairy:1,egg:0,gluten:0},
+    ings:[['Greek yogurt',400,36,20,16,0,'P'],['Frozen fruit mix',250,1.8,0,30,9,'X']] },
+  { id:'yogurt_fruit', name:'Greek Yogurt & Fruit', band:[300,700], mr:false, vg:null,
+    diet:{meat:0,pork:0,fish:0,dairy:1,egg:0,gluten:0},
+    ings:[['Greek yogurt',400,36,20,16,0,'P'],['Large apple',210,0.6,0.4,24,5,'X'],['Large banana',135,1.5,0.5,28,3.6,'X']] },
+  { id:'cottage_veg', name:'Cottage Cheese Veggie Bowl', band:[300,700], mr:false, vg:null,
+    diet:{meat:0,pork:0,fish:0,dairy:1,egg:0,gluten:0},
+    ings:[['Cottage cheese',400,44,17.2,13.6,0,'P'],['Cucumber',150,0.4,0.2,2.4,0.4,'X'],['Tomato',150,1.4,0.3,4.1,1.8,'X'],['Carrot',100,0.9,0.2,6.8,2.8,'X'],['Red onion',50,0.6,0.1,3.8,0.8,'X']] },
+  { id:'smoothie', name:'Protein Smoothie', band:[200,600], mr:false, vg:null,
+    diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:0},
+    ings:[['Protein powder',60,47,1,1.9,0,'P'],['Large bananas (x2)',270,3,0.9,55,7,'X'],['Ground flaxseed',15,3,6,4,4,'X']] },
+  { id:'protein_oats', name:'Protein Oats', band:[300,700], mr:false, vg:null,
+    diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:0},
+    ings:[['Protein powder',40,31,0.6,1.3,0,'P'],['Oats',60,8,3.9,35,6,'S'],['Large apple',210,0.6,0.4,24,5,'X'],['Large banana',135,1.5,0.5,28,3.6,'X']] },
+  { id:'protein_platter', name:'Protein Platter', band:[300,700], mr:false, vg:null,
+    diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:1},
+    ings:[['Firm tofu',100,9,4.2,2,0.9,'P'],['Seitan',50,13,1.8,2.7,0.9,'P'],['Tempeh',100,20,11,0.5,7,'P'],['Oil',10,0,10,0,0,'X'],['Tomato',150,1.4,0.3,4.1,1.8,'X'],['Carrot',100,0.9,0.2,6.8,2.8,'X'],['Spinach',50,1.5,0.2,0.7,1.1,'X']] },
+  { id:'tofu_scramble', name:'Tofu Scramble', band:[300,700], mr:false, vg:null,
+    diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:0},
+    ings:[['Firm tofu',400,36,16.8,8,3.6,'P'],['Mushrooms',150,3,0,4.5,3,'X'],['Onion',150,1.6,0.2,11.5,2.5,'X'],['Bell pepper',150,1.5,0.4,5.8,3.1,'X'],['Oil',10,0,10,0,0,'X']] },
+  { id:'tofu_lentil', name:'Tofu & Lentil Bowl', band:[300,700], mr:false, vg:null,
+    diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:0},
+    ings:[['Smoked tofu',200,28,16,1.8,2,'P'],['Lentils (canned)',200,10.8,0.8,28,13,'X'],['Tomato',100,0.9,0.2,2.7,1.2,'X'],['Cucumber',100,0.3,0.1,1.6,0.3,'X'],['Soy sauce',20,1.6,0.1,0.8,0,'X'],['Hot sauce',50,1,0.4,9,0,'X']] },
+  { id:'tofu_hummus', name:'Tofu & Hummus Bowl', band:[300,700], mr:false, vg:null,
+    diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:0},
+    ings:[['Smoked tofu',200,28,16,1.8,2,'P'],['Hummus',100,7.8,18,9.5,5.5,'X'],['Tomato',100,0.9,0.2,2.7,1.2,'X'],['Cucumber',100,0.3,0.1,1.6,0.3,'X'],['Carrot',100,0.9,0.2,6.8,2.8,'X']] },
+  { id:'pork_mushroom', name:'Pork Tenderloin & Mushroom Skillet', band:[300,700], mr:false, vg:'mushroomskillet',
+    diet:{meat:1,pork:1,fish:0,dairy:0,egg:0,gluten:0},
+    ings:[['Pork tenderloin',200,40,6.2,0,0,'P'],['Mushrooms',200,4,0,6,4,'X'],['Oil',10,0,10,0,0,'X'],['Spinach',100,2.9,0.4,1.4,2.2,'X'],['Tomato',100,0.9,0.2,2.7,1.2,'X'],['Carrot',100,0.9,0.2,6.8,2.8,'X']] },
+  { id:'tofu_mushroom', name:'Savory Tofu & Mushroom Skillet', band:[300,700], mr:false, vg:'mushroomskillet', plant:true,
+    diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:0},
+    ings:[['Smoked tofu',200,28,16,1.8,2,'P'],['Peanuts',25,6,11,1.7,1.9,'X'],['Mushrooms',200,4,0,6,4,'X'],['Oil',10,0,10,0,0,'X'],['Spinach',100,2.9,0.4,1.4,2.2,'X'],['Tomato',100,0.9,0.2,2.7,1.2,'X'],['Carrot',100,0.9,0.2,6.8,2.8,'X']] },
+
+  // ---------------- DINNER / HIGHER CAL (600-1500) ----------------
+  { id:'chicken_rice', name:'Chicken & Veggie Rice', band:[400,1500], mr:false, vg:null,
+    diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:0},
+    ings:[['Chicken breast',225,45,6.8,0,0,'P'],['White rice (dry)',80,5.7,0.6,63,1,'S'],['Frozen veg mix',250,7.8,1.2,32,10.7,'X'],['Oil',10,0,10,0,0,'X'],['Soy sauce',20,1.6,0.1,0.8,0,'X']] },
+  { id:'omelette', name:'Rustic Veggie Omelette', band:[400,1000], mr:false, vg:null,
+    diet:{meat:0,pork:0,fish:0,dairy:1,egg:1,gluten:0},
+    ings:[['Large eggs (x3)',150,18,15,0,0,'P'],['Cottage cheese',250,28,10.8,8.5,0,'P'],['Mushrooms',150,3,0,4.5,3,'X'],['Onion',150,1.6,0.2,11.5,2.5,'X'],['Bell pepper',150,1.5,0.4,5.8,3.1,'X'],['Oil',10,0,10,0,0,'X']] },
+  { id:'omelette_toast', name:'Rustic Veggie Omelette & Toast', band:[400,1500], mr:false, vg:null,
+    diet:{meat:0,pork:0,fish:0,dairy:1,egg:1,gluten:1},
+    ings:[['Large eggs (x3)',150,18,15,0,0,'P'],['Cottage cheese',250,28,10.8,8.5,0,'P'],['Bread',60,7,2.1,45.9*0.6,3.6,'S'],['Mushrooms',150,3,0,4.5,3,'X'],['Onion',150,1.6,0.2,11.5,2.5,'X'],['Bell pepper',150,1.5,0.4,5.8,3.1,'X'],['Oil',10,0,10,0,0,'X']] },
+  { id:'chicken_potato', name:'Chicken & Baked Potatoes', band:[600,1500], mr:false, vg:'bakedpotato',
+    diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:0},
+    ings:[['Chicken thighs',200,40,8.2,0,0,'P'],['Potatoes',500,17.5,1,151.5,18,'S'],['Oil',10,0,10,0,0,'X']] },
+  { id:'mockmeat_potato', name:'Mock Meat & Baked Potatoes', band:[600,1500], mr:false, vg:'bakedpotato', plant:true,
+    diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:0},
+    ings:[['Plant-based burger',200,34,26,8.8,1.8,'P'],['Potatoes',400,14,0.8,121.2,14.4,'S'],['Oil',10,0,10,0,0,'X']] },
+  { id:'chickpea_pasta', name:'Chickpea or Lentil Pasta', band:[600,1500], mr:false, vg:null,
+    diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:0},
+    ings:[['Chickpea/lentil pasta',200,54,3.6,116,25,'P'],['Tomato-based sauce',250,4,4,19.5,3.9,'X']] },
+  { id:'beans_sausage', name:'Baked Beans & Sausages', band:[600,1500], mr:false, vg:'bakedbeans',
+    diet:{meat:1,pork:1,fish:0,dairy:0,egg:0,gluten:0},
+    ings:[['Sausage',200,30,34,5.2,0,'P'],['Baked beans (can)',400,18.6,0.8,64,14,'S'],['Pickles',150,0.8,0.4,2.1,1.5,'X']] },
+  { id:'beans_pbsausage', name:'Baked Beans & Plant Sausages', band:[600,1500], mr:false, vg:'bakedbeans', plant:true,
+    diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:0},
+    ings:[['Plant-based sausage',200,12,22,38,0,'P'],['Baked beans (can)',400,18.6,0.8,64,14,'S'],['Pickles',150,0.8,0.4,2.1,1.5,'X']] },
+  { id:'chicken_proteinbowl', name:'Chicken Protein Bowl', band:[600,1200], mr:false, vg:null,
+    diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:0},
+    ings:[['Chicken breast',150,30,4.5,0,0,'P'],['Falafel',150,12.3,13.4,33,11.4,'X'],['Hummus',100,7.8,18,9.5,5.5,'X'],['Tomato',150,1.3,0.3,4,1.8,'X'],['Carrots',100,0.9,0.2,6.8,2.8,'X'],['Red onion',50,0.6,0.1,3.8,0.9,'X'],['Oil',5,0,5,0,0,'X']] },
+  { id:'chicken_noodles', name:'Chicken Noodles', band:[600,1500], mr:false, vg:'noodles',
+    diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:1},
+    ings:[['Chicken breast',150,30,4.5,0,0,'P'],['Wheat noodles',100,13,1.5,74.7,3.2,'S'],['Asian veg mix',200,4,0.6,16.3,5.6,'X'],['Sweet chilli sauce',90,0.7,0.7,35.3,0,'X'],['Oil',5,0,5,0,0,'X']] },
+  { id:'tofu_noodles', name:'Tofu Noodles', band:[600,1500], mr:false, vg:'noodles', plant:true,
+    diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:1},
+    ings:[['Smoked tofu',200,28,16,1.8,2,'P'],['Wheat noodles',100,13,1.5,74.7,3.2,'S'],['Asian veg mix',200,4,0.6,16.3,5.6,'X'],['Sweet chilli sauce',90,0.7,0.7,35.3,0,'X'],['Oil',5,0,5,0,0,'X']] },
+  { id:'burgers_meat', name:'Burgers & Carrot Sticks', band:[600,1500], mr:false, vg:'burgers',
+    diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:1},
+    ings:[['Burger patties (x2)',200,34,30,4.2,0,'P'],['Burger buns (x2)',120,11.8,4.7,58,2.1,'S'],['Carrots',200,1.8,0.4,13.6,5.6,'X'],['Onion slices',50,0.6,0.1,3.8,0.9,'X'],['Pickles',50,0.2,0.2,0.7,0.5,'X'],['Mustard',50,1.9,1.6,0.9,2,'X'],['Ketchup',50,0.5,0.1,14,0.1,'X']] },
+  { id:'burgers_plant', name:'Plant Burgers & Carrot Sticks', band:[600,1500], mr:false, vg:'burgers', plant:true,
+    diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:1},
+    ings:[['Plant-based burger',200,34,26,8.8,1.8,'P'],['Burger buns (x2)',120,11.8,4.7,58,2.1,'S'],['Carrots',200,1.8,0.4,13.6,5.6,'X'],['Onion slices',50,0.6,0.1,3.8,0.9,'X'],['Pickles',50,0.2,0.2,0.7,0.5,'X'],['Mustard',50,1.9,1.6,0.9,2,'X'],['Ketchup',50,0.5,0.1,14,0.1,'X']] },
+  { id:'wraps_meat', name:'Wraps', band:[600,1500], mr:false, vg:'wraps',
+    diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:1},
+    ings:[['Ground meat',100,21,7.1,0,0,'P'],['Lentils (canned)',200,10.8,0.8,28,13,'X'],['Whole wheat tortillas (x2)',130,12.7,12.7,59.7,12.7,'S'],['Onion',100,1.1,0.1,7.6,1.7,'X'],['Bell pepper',100,1,0.3,3.9,2.1,'X'],['Romaine',100,1.2,0.3,1.2,2.1,'X'],['Hot salsa',150,2.2,0.3,7.1,2.8,'X']] },
+  { id:'wraps_plant', name:'Wraps', band:[600,1500], mr:false, vg:'wraps', plant:true,
+    diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:1},
+    ings:[['Plant-based mince',100,14,8.6,9.4,0,'P'],['Lentils (canned)',200,10.8,0.8,28,13,'X'],['Whole wheat tortillas (x2)',130,12.7,12.7,59.7,12.7,'S'],['Onion',100,1.1,0.1,7.6,1.7,'X'],['Bell pepper',100,1,0.3,3.9,2.1,'X'],['Romaine',100,1.2,0.3,1.2,2.1,'X'],['Hot salsa',150,2.2,0.3,7.1,2.8,'X']] },
+  { id:'burrito_lg', name:'Burrito Bowl', band:[600,1500], mr:false, vg:'burritolg',
+    diet:{meat:1,pork:0,fish:0,dairy:1,egg:0,gluten:0},
+    ings:[['Ground meat',150,32,10.6,0,0,'P'],['Kidney beans',150,7.8,0.6,22,6.5,'S'],['Sweet corn',150,3.5,1.8,26,3,'X'],['Greek yogurt',150,13.5,7.5,6,0,'X'],['Romaine',100,1.2,0.3,1.2,2.1,'X'],['Onion',100,1.1,0.1,7.6,1.7,'X'],['Tomato',150,1.3,0.3,4,1.8,'X']] },
+  { id:'burrito_vegan', name:'Vegan Burrito Bowl', band:[600,1500], mr:false, vg:'burritolg', plant:true,
+    diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:0},
+    ings:[['Plant-based mince',100,14,8.6,9.4,0,'P'],['Kidney beans',150,7.8,0.6,22,6.5,'S'],['Sweet corn',150,3.5,1.8,26,3,'X'],['Soy yogurt',150,5.4,2.7,14.6,1.5,'X'],['Romaine',100,1.2,0.3,1.2,2.1,'X'],['Onion',100,1.1,0.1,7.6,1.7,'X'],['Tomato',150,1.3,0.3,4,1.8,'X']] },
+  { id:'chili_meat', name:'Chili', band:[600,1500], mr:false, vg:'chili',
+    diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:0},
+    ings:[['Ground meat',150,32,10.6,0,0,'P'],['Kidney beans',260,13.5,1,40,11.8,'S'],['Diced tomatoes (can)',400,3.2,0.4,12,4,'X'],['Onion',150,1.6,0.2,11.5,2.5,'X'],['Carrot',100,0.9,0.2,6.8,2.8,'X'],['Chilli peppers (x2)',75,1.5,0.5,4.5,0,'X'],['Oil',10,0,10,0,0,'X']] },
+  { id:'chili_vegan', name:'Vegan Chili', band:[600,1500], mr:false, vg:'chili', plant:true,
+    diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:0},
+    ings:[['Plant-based mince',150,21,12.9,14.1,0,'P'],['Kidney beans',260,13.5,1,40,11.8,'S'],['Diced tomatoes (can)',400,3.2,0.4,12,4,'X'],['Onion',150,1.6,0.2,11.5,2.5,'X'],['Carrot',100,0.9,0.2,6.8,2.8,'X'],['Chilli peppers (x2)',75,1.5,0.5,4.5,0,'X'],['Oil',10,0,10,0,0,'X']] },
+
+  // ---------------- PESCATARIAN DINNERS ----------------
+  { id:'salmon_potato', name:'Salmon & Baked Potatoes', band:[600,1500], mr:false, vg:null,
+    diet:{meat:0,pork:0,fish:1,dairy:0,egg:0,gluten:0},
+    ings:[['Salmon',200,42,8.8,0,0,'P'],['Potatoes',400,14,0.8,121.2,14.4,'S'],['Oil',10,0,10,0,0,'X']] },
+  { id:'trout_rice', name:'Trout & Veggie Rice', band:[400,1500], mr:false, vg:null,
+    diet:{meat:0,pork:0,fish:1,dairy:0,egg:0,gluten:0},
+    ings:[['Trout',200,40,12.4,0,0,'P'],['White rice (dry)',80,5.7,0.6,63,1,'S'],['Frozen veg mix',250,7.8,1.2,32,10.7,'X'],['Oil',10,0,10,0,0,'X'],['Soy sauce',20,1.6,0.1,0.8,0,'X']] },
+  { id:'tuna_pasta', name:'Tuna Pasta', band:[600,1500], mr:false, vg:null,
+    diet:{meat:0,pork:0,fish:1,dairy:0,egg:0,gluten:1},
+    ings:[['Tuna (drained)',130,25,1.3,0,0,'P'],['Wheat pasta',100,13,1.5,74.7,0,'S'],['Olive oil',15,0,15,0,0,'X'],['Lemon juice',50,0.2,0.1,3.3,0,'X'],['Garlic clove',5,0.2,0,1,0,'X'],['Green olives',25,0.2,4,0.1,0.8,'X']] },
 ];
 
-function matchMeals(meal, slotName, restriction) {
-  const restr = (restriction && restriction.length) ? restriction : ['none'];
-  const noRestr = restr.includes('none');
-  return SEED_LIBRARY
-    .filter((d) => d.slot.includes(slotName))
-    .filter((d) => noRestr || d.diet.some((t) => restr.includes(t)))
-    .map((d) => {
-      const density = d.kcal / d.g;
-      const inBand = density >= meal.densityBand[0] && density <= meal.densityBand[1];
-      const proteinFit = Math.abs(d.p - meal.protein);
-      return { ...d, density: Math.round(density * 100) / 100, inBand, proteinFit };
-    })
-    .sort((a, b) => (b.inBand - a.inBand) || (a.proteinFit - b.proteinFit))
-    .slice(0, 2);
+
+
+// energy: 4/9/4 with fiber at 2 kcal/g
+const kcalMacro = (p,f,c,fib)=> 4*p + 9*f + 4*c - 2*fib;
+const ingKcal = (ig)=> kcalMacro(ig[2],ig[3],ig[4],ig[5]);
+const ingP = (ig)=> ig[2];
+
+// PTOL: protein may land within +/-5g of target (Radu's rule). BAND_GRACE: a meal
+// is only offered where the slot target sits inside its written calorie band.
+const TUNE = { D:0.35, gMin:0.6, gMax:1.8, aMin:0.4, aMax:2.2, bMin:0.25, bMax:3.0, PTOL:5, BAND_GRACE:0.03, MAXDRIFT:0.12 };
+
+function groupSums(ings){ let k=0,p=0; ings.forEach(ig=>{k+=ingKcal(ig); p+=ingP(ig);}); return {k,p}; }
+function solve2(a1,b1,c1,a2,b2,c2){ const det=a1*b2-b1*a2; if(Math.abs(det)<1e-6) return null; return [(c1*b2-b1*c2)/det,(a1*c2-c1*a2)/det]; }
+
+function solveMeal(meal, K, P, T=TUNE){
+  // band gate: don't scale a meal outside the range it was written for
+  if(meal.band && (K < meal.band[0]*(1-T.BAND_GRACE) || K > meal.band[1]*(1+T.BAND_GRACE))) return {feasible:false};
+
+  const P_g = meal.ings.filter(i=>i[6]==='P');
+  const S_g = meal.ings.filter(i=>i[6]==='S');
+  const X_g = meal.ings.filter(i=>i[6]==='X');
+  const base = groupSums(meal.ings);
+  const s = K/base.k;
+  const gp = groupSums(P_g), gs = groupSums(S_g), gx = groupSums(X_g);
+  const hasStarch = S_g.length>0;
+  let scaleP, scaleS, scaleX, mode;
+
+  if(hasStarch){
+    const g = clamp(1+T.D*(s-1), T.gMin, T.gMax);
+    const sol = solve2(gp.k, gs.k, K-g*gx.k, gp.p, gs.p, P-g*gx.p);
+    if(sol){ [scaleP,scaleS]=sol; scaleX=g; mode='starch2'; }
+    if(!sol || scaleP<T.aMin||scaleP>T.aMax||scaleS<T.bMin||scaleS>T.bMax){
+      // coupled: protein group + starch scale together to hit CALORIES exactly;
+      // protein floats within +/-PTOL, sides damped.
+      const g2=clamp(1+T.D*(s-1),T.gMin,T.gMax);
+      // (a) written portions already fit (protein +/-PTOL, calories close)? keep them as-is.
+      if(Math.abs(base.p-P)<=T.PTOL && Math.abs(base.k-K)/K<=T.MAXDRIFT){ scaleP=1;scaleS=1;scaleX=1;mode='as-written'; }
+      else {
+        const u=(K - g2*gx.k)/(gp.k+gs.k);
+        const achP=u*(gp.p+gs.p)+g2*gx.p;
+        if(u>=T.aMin && u<=T.aMax && Math.abs(Math.round(achP)-P)<=T.PTOL){ scaleP=u;scaleS=u;scaleX=g2;mode='coupled'; }
+        else return {feasible:false};
+      }
+    }
+  } else {
+    const sol = solve2(gp.k, gx.k, K, gp.p, gx.p, P);
+    if(!sol) return {feasible:false};
+    [scaleP,scaleX]=sol; scaleS=1; mode='lowcarb2';
+    if(scaleP<T.aMin||scaleP>T.aMax||scaleX<T.bMin||scaleX>T.bMax){
+      // coupled: protein group scales to hit CALORIES; protein floats +/-PTOL, sides damped.
+      const g2=clamp(1+T.D*(s-1),T.gMin,T.gMax);
+      if(Math.abs(base.p-P)<=T.PTOL && Math.abs(base.k-K)/K<=T.MAXDRIFT){ scaleP=1;scaleX=1;mode='as-written'; }
+      else {
+        const u=(K - g2*gx.k)/gp.k;
+        const achP=u*gp.p+g2*gx.p;
+        if(u>=T.aMin&&u<=T.aMax&&Math.abs(Math.round(achP)-P)<=T.PTOL){ scaleP=u;scaleX=g2;mode='coupled-lc'; }
+        else return {feasible:false};
+      }
+    }
+  }
+
+  const scaleOf=(role)=> role==='P'?scaleP: role==='S'?scaleS: scaleX;
+  let aK=0,aP=0,aF=0,aC=0,aFib=0,grams=0;
+  const portions = meal.ings.map(ig=>{
+    const sc=scaleOf(ig[6]);
+    const g=Math.max(5, Math.round(ig[1]*sc/5)*5);
+    const r=g/ig[1];
+    aK+=kcalMacro(ig[2]*r,ig[3]*r,ig[4]*r,ig[5]*r); aP+=ig[2]*r; aF+=ig[3]*r; aC+=ig[4]*r; aFib+=ig[5]*r; grams+=g;
+    return {name:ig[0], grams:g};
+  });
+  return { feasible:true, mode, portions,
+    kcal:Math.round(aK), protein:Math.round(aP), fat:Math.round(aF), carbs:Math.round(aC), fiber:Math.round(aFib),
+    density: Math.round(aK/grams*100)/100, grams:Math.round(grams),
+    scaleP:Math.round(scaleP*100)/100, scaleS:Math.round(scaleS*100)/100, scaleX:Math.round(scaleX*100)/100 };
 }
 
-function slotNameFor(i, count, morningMode) {
-  if (i === count - 1) return 'dinner';
-  if (i === 0) return 'early';
-  return 'mid';
+function eligible(meal, restr){
+  const d=meal.diet; const r=(restr&&restr.length)?restr:['none'];
+  if(r.includes('none')) return true;
+  for(const x of r){
+    if(x==='vegan' && (d.meat||d.pork||d.fish||d.dairy||d.egg)) return false;
+    if(x==='vegetarian' && (d.meat||d.pork||d.fish)) return false;
+    if((x==='pescatarian'||x==='nomeat') && (d.meat||d.pork)) return false;
+    if(x==='nopork' && d.pork) return false;
+    if(x==='nodairy' && d.dairy) return false;
+    if(x==='gluten' && d.gluten) return false;
+  }
+  return true;
+}
+const isVegan=(m)=>{const d=m.diet;return !(d.meat||d.pork||d.fish||d.dairy||d.egg);};
+
+
+// Recipe steps per meal id (Radu's final wording). Method only; the card shows
+// the scaled ingredient weights separately. Rendered as a numbered list behind a
+// "See recipe" toggle.
+const STEPS = {
+  huel: [
+    "Shake the powder with cold water (roughly 500 ml for two scoops) and drink.",
+  ],
+  shake_fruit: [
+    "Shake the protein powder with cold water.",
+    "Eat the bananas alongside.",
+  ],
+  bars_fruit: [
+    "Pack protein bars and fruit and serve at your meal time. This replaces a meal when you're short on time or away from home.",
+  ],
+  chicken_fajitas: [
+    "Slice the chicken and season with paprika, cumin, garlic powder, and salt.",
+    "Sear it in a non-stick pan with the measured oil until browned, then set aside. (Or season and bake it, no oil needed.)",
+    "Cook the peppers and onion with a bit of water in the same pan (water will prevent them from sticking).",
+    "Mix the chicken and the veggies, add the salsa on top, and serve.",
+  ],
+  chicken_peas: [
+    "Slice the chicken thighs and season with salt, pepper, and garlic, then sear in a non-stick pan (thighs are fatty enough that you can cook them with little to no oil and will not stick).",
+    "Cook the frozen peas and carrots until tender (boil them in a pot of water, or cook them in a pan with a bit of water, covered, stirring often).",
+    "Season the peas and carrots with garlic and chilli, combine with the chicken, and serve.",
+  ],
+  chicken_greenbeans: [
+    "Slice the chicken thighs and season with salt, pepper, and garlic, then sear in a non-stick pan (thighs are fatty enough to cook with little to no oil and will not stick).",
+    "Cook the frozen green beans and carrots until tender (boil them in a pot of water, or cook them in a pan with a bit of water, covered, stirring often).",
+    "Season with garlic and chilli, combine with the chicken, and serve.",
+  ],
+  burrito_sm: [
+    "Cook the ground meat together with the onion and peppers in a non-stick pan with the measured oil, breaking it into small pieces as it cooks, and season with cumin, paprika, and garlic.",
+    "Drain and rinse the canned kidney beans and add to the pan to heat.",
+    "Put everything in a bowl and add the salsa on top.",
+  ],
+  tuna_salad: [
+    "Drain the tuna and mix it with the Greek yogurt and mustard (this makes a creamy base, so you don't need mayo).",
+    "Chop the lettuce, onion, tomato, and olives and mix them in a large bowl.",
+    "Season with black pepper, and add a squeeze of lemon or some hot sauce.",
+  ],
+  tuna_stirfry: [
+    "Cook the frozen veg mix in a non-stick pan with the measured oil until soft.",
+    "When the veggies are cooked, add the scrambled eggs on top and mix. Cook until done.",
+    "Add the drained tuna, mix everything together, and season with soy sauce or chilli.",
+  ],
+  yogurt_mixfruit: [
+    "Stir the frozen fruit into the yogurt and leave it a few minutes to soften (or heat the fruit briefly in the microwave). Add cinnamon on top if you like.",
+  ],
+  yogurt_fruit: [
+    "Slice the apple and banana over the yogurt. Add cinnamon, or a little sweetener if you want it sweeter.",
+  ],
+  cottage_veg: [
+    "Chop the cucumber, tomato, carrot, and onion and mix them into the cottage cheese.",
+    "Season with salt, pepper, and herbs, or add some hot sauce.",
+  ],
+  smoothie: [
+    "Blend the protein powder, bananas, flaxseed, and cold water until smooth. Add ice for a thicker drink.",
+  ],
+  protein_oats: [
+    "Cook the oats with water on the stove or in the microwave until thick.",
+    "Take them off the heat, then stir in the protein powder (adding it off the heat keeps it smooth).",
+    "Add the sliced apple and banana on top.",
+  ],
+  protein_platter: [
+    "Slice the tofu, tempeh, and seitan and cook them in a non-stick pan with the measured oil until golden on all sides. Season with soy sauce, garlic, or paprika.",
+    "Wash and chop the tomato, carrot, and spinach and put them on the plate raw.",
+    "Eat the vegetables fresh, between bites of the protein.",
+  ],
+  tofu_scramble: [
+    "Mash the tofu with a fork, breaking it into small pieces.",
+    "Add the tofu, mushrooms, onion and pepper together in a non-stick pan and cook with the measured oil until soft. Add water if they stick. Cook until the tofu is golden and dry and the veggies are soft.",
+    "Season with salt, garlic, and black pepper.",
+  ],
+  tofu_lentil: [
+    "No cooking needed, since smoked tofu is ready to eat. Cut it into cubes.",
+    "Add the drained canned lentils, chopped tomato, and cucumber.",
+    "Add the soy sauce and hot sauce and mix.",
+  ],
+  tofu_hummus: [
+    "Cut the smoked tofu into cubes and chop the tomato, cucumber, and carrot.",
+    "Put them on a plate with the hummus, to dip or spread.",
+  ],
+  pork_mushroom: [
+    "Season the pork with salt, pepper, and paprika, cook it in a non-stick pan with the measured oil until done.",
+    "Cook the mushrooms together with the pork in the same pan (they take on the flavour).",
+    "Add the spinach at the end and cook until it softens (or add raw spinach leaves to your plate). Serve with the raw tomato and carrot on the side.",
+  ],
+  tofu_mushroom: [
+    "Cut the smoked tofu into cubes and cook in a non-stick pan with the measured oil until golden.",
+    "Add the mushrooms and cook until soft.",
+    "Add the spinach and cook until it softens (or add raw spinach leaves to your plate). Serve with the tomato and carrot. Add peanuts on top for crunch. Add soy sauce or chilli if you like.",
+  ],
+  chicken_rice: [
+    "Add the dry rice and frozen veg mix to the same pot, cover with water and boil until done.",
+    "Season and cook the chicken with the measured oil (in a pan or the oven), then slice it.",
+    "Add the rice and chicken and mix together with the soy sauce. Adjust the quantity of rice to the target calories.",
+  ],
+  omelette: [
+    "Cook the onion, pepper, and mushrooms in a non-stick pan with the measured oil until soft and lightly browned. This step is what makes it taste good.",
+    "Beat the eggs, pour them over the vegetables, and cook, stirring, until set.",
+    "Serve the cottage cheese on the side. Season with salt and pepper and hot sauce.",
+  ],
+  omelette_toast: [
+    "Cook the onion, pepper, and mushrooms in a non-stick pan with the measured oil until soft and lightly browned. This step is what makes it taste good.",
+    "Beat the eggs, pour them over the vegetables, and cook, stirring, until set.",
+    "Serve the cottage cheese on the side and the toasted bread. Season with salt and pepper and hot sauce.",
+  ],
+  chicken_potato: [
+    "Peel the potatoes, cut them into wedges or sticks, coat them with a little oil, and cook in the oven or air fryer until soft and golden.",
+    "Season the chicken thighs and cook them in a pan or the oven.",
+    "Serve with ketchup, pickles, or hot chilli peppers. Adjust the quantity of potatoes to the target calories.",
+  ],
+  mockmeat_potato: [
+    "Peel the potatoes, cut them into wedges or sticks, coat them with a little oil, and cook in the oven or air fryer until soft and golden.",
+    "Cook the plant-based mock meat following the pack instructions, in a pan or the oven.",
+    "Serve with ketchup, pickles, or hot chilli peppers. Adjust the quantity of potatoes to the target calories.",
+  ],
+  chickpea_pasta: [
+    "Boil the pasta. Check it often, because legume pasta gets soft faster than wheat pasta. Don't overboil to avoid it getting soggy.",
+    "Heat the tomato sauce or add it straight from the jar on top of the pasta.",
+    "Mix them together and season with garlic, chilli, and herbs.",
+  ],
+  beans_sausage: [
+    "Cook the sausages in a pan (little to no oil, since they release their own fat) or in the air fryer.",
+    "Heat the whole can of baked beans or add as is to a bowl.",
+    "Add the sausages. Serve with the pickles on the side. Add canned mushrooms if you want extra food volume.",
+  ],
+  beans_pbsausage: [
+    "Cook the plant sausages following the pack instructions, in a pan with a little oil or in the air fryer.",
+    "Heat the whole can of baked beans or add as is to a bowl.",
+    "Add the sausages. Serve with the pickles on the side. Add canned mushrooms if you want extra food volume.",
+  ],
+  chicken_proteinbowl: [
+    "Season and cook the chicken (in a pan or the oven), then slice it.",
+    "Cook the pre-made falafel (in a pan, microwave, or air fryer) or serve as is, if it's pre-cooked.",
+    "Chop the tomato, carrot, and onion.",
+    "Put everything in a bowl and add the hummus, to dip or spread.",
+  ],
+  chicken_noodles: [
+    "Add the Asian veg mix to a pot, cover with water and boil for 10 minutes. Then add the noodles to the same boiling pot. Cook until soft.",
+    "Season and cook the chicken on a pan with the measured oil, then slice it.",
+    "Drain the veg mix and noodles and add to a bowl. Mix with the chicken and add sweet chilli sauce on top. Adjust the quantity of noodles to your target calories.",
+  ],
+  tofu_noodles: [
+    "Add the Asian veg mix to a pot, cover with water and boil for 10 minutes. Then add the noodles to the same boiling pot. Cook until soft.",
+    "Cut the smoked tofu into cubes and cook in a non-stick pan with the measured oil until golden. Alternatively, keep the smoked tofu as is, since it's ready to serve.",
+    "Drain the veg mix and noodles and add to a bowl. Mix with the tofu and add sweet chilli sauce on top. Adjust the quantity of noodles to your target calories.",
+  ],
+  burgers_meat: [
+    "Cook the patties in a pan (little to no oil, since they are fatty) or under the broiler.",
+    "Toast the buns if you like. Spread mustard on the bottom half of the buns, add the patty, put one or two thin slices of onion on top, 5-6 thin slices of pickle, and cover with ketchup. Add the top part of the bun. This makes it taste like a McDonald's burger.",
+    "Serve with the raw carrot sticks on the side for crunch or cook the carrot sticks in the air fryer to give them a texture that resembles fries.",
+  ],
+  burgers_plant: [
+    "Cook the patties in a pan (little to no oil, since they are fatty) or under the broiler.",
+    "Toast the buns if you like. Spread mustard on the bottom half of the bun, add the patty, put one or two thin slices of onion on top, 5-6 thin slices of pickle, and cover with ketchup. Add the top part of the bun. This makes it taste like a McDonald's burger.",
+    "Serve with the raw carrot sticks on the side for crunch or cook the carrot sticks in the air fryer to give them a texture that resembles fries.",
+  ],
+  wraps_meat: [
+    "Cook the ground meat with cumin, paprika, and garlic (little to no oil, since the meat releases its own fat).",
+    "Drain and rinse the canned lentils and mix with the meat, lettuce, onion, pepper, and salsa in a large bowl.",
+    "Place the tortilla on a large plate, add three to four spoons of the mix on it, and roll.",
+  ],
+  wraps_plant: [
+    "Cook the plant mince with cumin, paprika, and garlic.",
+    "Drain and rinse the canned lentils and mix with the mince, lettuce, onion, pepper, and salsa in a large bowl.",
+    "Place the tortilla on a large plate, add three to four spoons of the mix on it, and roll.",
+  ],
+  burrito_lg: [
+    "Cook the ground meat with cumin and paprika (little to no oil).",
+    "Drain and rinse the canned beans and corn.",
+    "Put the meat, beans, corn, chopped romaine, onion, and tomato in a bowl, and add the Greek yogurt on top (it works instead of sour cream). Serve as is or with hot sauce / chilli peppers.",
+  ],
+  burrito_vegan: [
+    "Cook the plant mince with cumin and paprika (little to no oil).",
+    "Drain and rinse the canned beans and corn.",
+    "Put the mince, beans, corn, chopped romaine, onion, and tomato in a bowl, and add the soy yogurt on top. Serve as is or with hot sauce / chilli peppers.",
+  ],
+  chili_meat: [
+    "Add the meat, onion, carrot, and fresh chilli in a pot with the measured oil, seasoned with cumin, paprika, and chilli. Cook until soft.",
+    "Drain and rinse the kidney beans and add to the pot. Then add diced tomatoes (fresh or canned) and let it simmer for 5 to 10 minutes.",
+  ],
+  chili_vegan: [
+    "Add the mock meat, onion, carrot, and fresh chilli in a pot with the measured oil, seasoned with cumin, paprika, and chilli. Cook until soft.",
+    "Drain and rinse the kidney beans and add to the pot. Then add diced tomatoes (fresh or canned) and let it simmer for 5 to 10 minutes.",
+  ],
+  salmon_potato: [
+    "Peel the potatoes and cut into wedges, coat them with a little oil, and cook in the oven or air fryer until soft and golden.",
+    "Season the salmon with salt, pepper, and lemon and bake it, or cook it skin-side down in a non-stick pan.",
+    "Serve with low-fat garlic sauce or lemon juice.",
+  ],
+  trout_rice: [
+    "Add the frozen veg mix together with the dry rice in a pot, cover with water, and boil until soft.",
+    "Season the trout with salt, pepper, and lemon and bake it or cook it in a pan.",
+    "Drain the rice and veg and season to your liking. Serve as is or with soy sauce, low-fat garlic sauce, or lemon juice.",
+  ],
+  tuna_pasta: [
+    "Boil the pasta and keep a bit of the cooking water.",
+    "Take the pan off the heat and mix the drained pasta with the drained tuna, olive oil, lemon juice, crushed garlic, and olives. Add a little of the pasta water to loosen it.",
+    "Season with black pepper and chilli.",
+  ],
+};
+
+
+
+const STARCH_SLOT_MIN = 550;
+const MR_CAP = 1;
+const TARGET_OPTIONS = 4;
+const NO_RECIPE = new Set(['huel','shake_fruit','bars_fruit','smoothie','yogurt_mixfruit','yogurt_fruit','cottage_veg','tuna_salad']);
+
+const hasStarch = (m)=> m.ings.some(i=>i[6]==='S');
+const needsRecipe = (m)=> !NO_RECIPE.has(m.id);
+const fit = (s)=> Math.abs((s.scaleP||1)-1)+Math.abs((s.scaleS||1)-1)+Math.abs((s.scaleX||1)-1);
+const category = (m)=> isVegan(m) ? 'plant' : (m.diet.fish ? 'fish' : (m.diet.meat||m.diet.pork ? 'meat' : 'veg-animal'));
+
+function selectCarousels(realMeals, structure, answers){
+  const restriction = (answers && answers.restriction) || (structure.flags && structure.flags.restriction) || ['none'];
+  const daytimeControl = answers && answers.daytimeControl;
+  const allowMR = daytimeControl==='eatout' || daytimeControl==='none';
+  const evenPlan = structure.backloadTier==='light';
+  const usedVg = new Set();
+  const usedIds = new Set();
+  const carousels = [];
+
+  realMeals.forEach((slot)=>{
+    const K=slot.kcal, P=slot.protein;
+    const starchOK = K>=STARCH_SLOT_MIN || evenPlan;
+    let pool = MEALS
+      .filter(m => eligible(m,restriction) && (!m.mr || allowMR) && (!hasStarch(m) || starchOK) && !(m.vg && usedVg.has(m.vg)))
+      .map(m => ({ m, solved: solveMeal(m, K, P) }))
+      .filter(o => o.solved.feasible);
+    pool.sort((a,b)=> (usedIds.has(a.m.id)?1:0)-(usedIds.has(b.m.id)?1:0) || fit(a.solved)-fit(b.solved) || (a.m.id<b.m.id?-1:1));
+
+    const picked=[]; let mrCount=0; const localVg=new Set(); const catCount={};
+    const canTake=(o)=> !picked.includes(o) && !(o.m.vg && localVg.has(o.m.vg)) && !(o.m.mr && mrCount>=MR_CAP);
+    const take=(o)=>{ picked.push(o); if(o.m.mr)mrCount++; if(o.m.vg)localVg.add(o.m.vg); catCount[category(o.m)]=(catCount[category(o.m)]||0)+1; };
+    // category-balanced greedy: least-used category first, then fresh/fit order (pool index)
+    const pickOne=()=>{ let best=null,bk=null; for(let i=0;i<pool.length;i++){ const o=pool[i]; if(!canTake(o))continue; const k=[catCount[category(o.m)]||0, i]; if(!best||k[0]<bk[0]||(k[0]===bk[0]&&k[1]<bk[1])){best=o;bk=k;} } return best; };
+    let o; while(picked.length<TARGET_OPTIONS && (o=pickOne())) take(o);
+
+    if(picked.length && !picked.some(x=>isVegan(x.m))){
+      const veg = pool.find(x=>isVegan(x.m) && !(x.m.vg && localVg.has(x.m.vg)));
+      if(veg){ let ri=-1; for(let i=picked.length-1;i>=0;i--){ if(!isVegan(picked[i].m)){ri=i;break;} }
+        if(ri>=0){ const rem=picked[ri]; if(rem.m.vg)localVg.delete(rem.m.vg); picked[ri]=veg; if(veg.m.vg)localVg.add(veg.m.vg); }
+        else if(picked.length<TARGET_OPTIONS) take(veg); }
+    }
+
+    picked.forEach(o=>{ if(o.m.vg) usedVg.add(o.m.vg); usedIds.add(o.m.id); });
+    carousels.push({ K, P, options: picked.map(o=>({
+      id:o.m.id, name:o.m.name, img:'/meals/'+o.m.id+'.jpg', vegan:isVegan(o.m), recipe:needsRecipe(o.m),
+      kcal:o.solved.kcal, protein:o.solved.protein, carbs:o.solved.carbs, fat:o.solved.fat, fiber:o.solved.fiber,
+      density:o.solved.density, portions:o.solved.portions, steps:STEPS[o.m.id]||[],
+    })) });
+  });
+  return carousels;
 }
 
 // =====================================================
@@ -1839,6 +2304,80 @@ const TimelinePreview = ({ structure, personalization, meals }) => {
 };
 
 
+const MealCard = ({ o }) => {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="bg-white border border-stone-200 rounded-xl p-4 h-full">
+      <div className="flex gap-3 items-start">
+        <img src={o.img} alt={o.name} loading="lazy"
+          onError={(e) => { e.currentTarget.style.display = 'none'; }}
+          style={{ flex: '0 0 auto', width: 112, height: 112, objectFit: 'cover', borderRadius: '10px', background: '#f5f5f4', display: 'block' }} />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <div className="font-semibold text-stone-900 text-sm leading-snug">{o.name}</div>
+            {o.vegan && <span className="shrink-0 text-xs font-semibold uppercase tracking-wide rounded-full px-2 py-0.5"
+              style={{ color: '#047857', background: '#ecfdf5', border: '1px solid #a7f3d0' }}>Vegan</span>}
+          </div>
+          <div className="text-sm text-stone-700 mt-1.5 leading-snug">{o.kcal} kcal · {o.protein}P · {o.carbs}C · {o.fat}F · {o.fiber}g fiber</div>
+          <div className="text-xs text-stone-400 mt-1">Calorie density {o.density} kcal/g</div>
+        </div>
+      </div>
+      <div className="mt-3 pt-3 border-t border-stone-100">
+        <div className="text-xs font-medium text-stone-500 mb-1">Ingredients</div>
+        <div className="text-sm text-stone-700 leading-relaxed">{o.portions.map((p) => `${p.name} ${p.grams}g`).join(' · ')}</div>
+      </div>
+      {o.steps && o.steps.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-stone-100">
+          <button onClick={() => setOpen(!open)} className="flex items-center gap-1 text-sm font-medium text-orange-600">
+            {open ? 'Hide recipe' : 'See recipe'}
+            <ChevronDown className="w-4 h-4" style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }} />
+          </button>
+          {open && (
+            <ol className="mt-2.5 space-y-2">
+              {o.steps.map((s, i) => (
+                <li key={i} className="flex gap-2.5 text-sm text-stone-700 leading-relaxed">
+                  <span className="text-stone-400 tabular-nums flex-shrink-0">{i + 1}</span>
+                  <span>{s}</span>
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const MealCarousel = ({ options }) => {
+  const [active, setActive] = useState(0);
+  const ref = useRef(null);
+  const onScroll = () => { const el = ref.current; if (!el) return; setActive(Math.round(el.scrollLeft / el.clientWidth)); };
+  const go = (i) => { const el = ref.current; if (!el) return; el.scrollTo({ left: i * el.clientWidth, behavior: 'smooth' }); };
+  if (!options || !options.length) return null;
+  return (
+    <div>
+      <style>{'.mf-carousel::-webkit-scrollbar{display:none}'}</style>
+      <div ref={ref} onScroll={onScroll} className="mf-carousel"
+        style={{ display: 'flex', overflowX: 'auto', scrollSnapType: 'x mandatory', scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}>
+        {options.map((o, i) => (
+          <div key={i} style={{ flex: '0 0 100%', minWidth: 0, boxSizing: 'border-box', scrollSnapAlign: 'start', padding: '2px' }}>
+            <MealCard o={o} />
+          </div>
+        ))}
+      </div>
+      {options.length > 1 && (
+        <div className="flex items-center justify-center gap-1.5 mt-2">
+          {options.map((_, i) => (
+            <button key={i} onClick={() => go(i)} aria-label={`Option ${i + 1}`}
+              style={{ width: i === active ? 18 : 6, height: 6, borderRadius: 9999, transition: 'width .2s' }}
+              className={i === active ? 'bg-stone-800' : 'bg-stone-300'} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const ResultsScreen = ({ code, structure, personalization, plan, templateId, alternative, decodedMode, answers, onRestart, onBack }) => {
   const [copied, setCopied] = useState(false);
   const [showAlt, setShowAlt] = useState(false);
@@ -1904,15 +2443,17 @@ const ResultsScreen = ({ code, structure, personalization, plan, templateId, alt
       </div>
 
       <div className="mt-5">
-        <h3 className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-3">Meal-by-meal targets</h3>
-        <div className="space-y-2">
+        <h3 className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Meal-by-meal targets</h3>
+        <p className="text-xs text-stone-500 mb-3 leading-relaxed">Quantities are raw weights unless noted. Scale them to the brands you use — macros vary a little by product. Calorie density is calories per gram; lower means more food for the same calories, so it fills you up more. Swipe each meal for four options.</p>
+        <div className="space-y-4">
           {(() => {
-            const realCount = aPlan.meals.filter((m) => !m.isShake).length;
+            const reals = aPlan.meals.filter((mm) => !mm.isShake).map((mm) => ({ kcal: mm.kcal, protein: mm.protein }));
+            const carousels = selectCarousels(reals, aStructure, answers);
             let realIdx = 0;
             return aPlan.meals.map((m, i) => {
               if (m.isShake) {
                 return (
-                  <div key={i} className="bg-orange-50/60 border border-orange-200 rounded-xl p-4">
+                  <div key={i} className="bg-orange-50 border border-orange-200 rounded-xl p-4">
                     <div className="flex items-center justify-between">
                       <div className="font-semibold text-stone-900 flex items-center gap-2">
                         <ShakeIcon className="w-4 h-4 text-orange-500" />
@@ -1928,22 +2469,16 @@ const ResultsScreen = ({ code, structure, personalization, plan, templateId, alt
                 );
               }
               const myNum = ++realIdx;
-              const slot = slotNameFor(realIdx - 1, realCount, aStructure.morningMode);
-              const examples = matchMeals(m, slot, restriction);
+              const car = carousels[realIdx - 1];
               return (
-                <div key={i} className="bg-white border border-stone-200 rounded-xl p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="font-semibold text-stone-900">Meal {myNum} <span className="text-xs font-normal text-stone-500">· {m.pctOfDay}% of calories</span></div>
-                    <div className="text-lg font-bold text-stone-900">{m.kcal} kcal</div>
+                <div key={i}>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="font-semibold text-stone-900 text-sm">Meal {myNum} <span className="text-xs font-normal text-stone-500">· {m.pctOfDay}% of calories</span></div>
+                    <div className="text-sm font-semibold text-stone-900">{m.kcal} kcal · {m.protein}P</div>
                   </div>
-                  <div className="text-sm text-stone-600 mt-1">{m.protein}g protein · {m.carbs}g carbs · {m.fat}g fat · {m.fiber}g fiber</div>
-                  {m.densityBand && <div className="text-xs text-stone-400 mt-1">Target density: {m.densityBand[0]}–{m.densityBand[1]} kcal/g</div>}
-                  {examples.length > 0 && (
-                    <div className="mt-2 pt-2 border-t border-stone-100 text-xs text-stone-500">
-                      <span className="font-medium text-stone-600">Examples (seed):</span> {examples.map((e)=>`${e.name} (~${e.density} kcal/g)`).join(' · ')}
-                      <div className="text-stone-400 mt-0.5">Scale portions to hit the targets above. Full photo library coming soon.</div>
-                    </div>
-                  )}
+                  {car && car.options.length > 0
+                    ? <MealCarousel options={car.options} />
+                    : <div className="bg-white border border-stone-200 rounded-xl p-4 text-sm text-stone-500">No library meals fit this slot yet.</div>}
                 </div>
               );
             });
