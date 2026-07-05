@@ -1965,6 +1965,12 @@ function computeMealSchedule(structure, p) {
     // after the session. A FASTED morning is excluded — it keeps its later first
     // meal (wake + 4h) and lets the optional pre-workout shake bridge the session.
     firstMeal = Math.max(wake + FIRST_MEAL_AFTER_WAKE, trainC + POST_WORKOUT_LIGHT_DELAY);
+  } else if (trains && wk === 'midday' && w.morning && trainC > wake && trainC <= firstMeal) {
+    // Trains BETWEEN two meals, but the session lands on (or before) the possibly
+    // delayed first meal, so forward spacing would leave nothing in front of it.
+    // Pull the first meal ahead of the session as a genuine pre-workout meal; the
+    // post-workout meal then follows from the normal spacing.
+    firstMeal = Math.max(wake + FIRST_MEAL_AFTER_WAKE, trainC - PRE_WORKOUT_MEAL_GAP);
   } else if (w.morning && trainC >= wake && trainC < firstMeal) {
     firstMeal = Math.max(firstMeal, trainC + 45);
   }
@@ -2037,18 +2043,22 @@ function computeMealSchedule(structure, p) {
       }
       mealTimes.push(lastMealTime);
     }
-    // A midday session isn't used to anchor meals (unlike the morning/evening
-    // branches), so forward/even spacing can drop a meal inside the ~90-min
-    // workout. Move any meal that lands during the session to when it ends, then
-    // keep the list ordered. (No-op for early/no-workout days.)
-    if (trains && !w.morning && !w.evening) {
-      const wEnd = trainC + POST_WORKOUT_LIGHT_DELAY;
-      for (let i = 0; i < mealTimes.length; i++) {
-        if (mealTimes[i] > trainC && mealTimes[i] < wEnd) mealTimes[i] = wEnd;
-      }
-      for (let i = 1; i < mealTimes.length; i++) {
-        if (mealTimes[i] < mealTimes[i - 1]) mealTimes[i] = mealTimes[i - 1];
-      }
+  }
+
+  // No meal should sit inside the workout window (the session runs ~90 min). The
+  // morning and evening branches anchor meals around the session, but forward/even
+  // spacing, and a fasted first meal that happens to fall on the session, can still
+  // drop a meal on top of it. Move any meal that starts at or during the session to
+  // when it ends, then keep the list ordered. Post-workout meals already sit at the
+  // end (trainC + 90), and pre-workout meals sit before trainC, so this leaves them
+  // untouched.
+  if (trains) {
+    const wEnd = trainC + POST_WORKOUT_LIGHT_DELAY;
+    for (let i = 0; i < mealTimes.length; i++) {
+      if (mealTimes[i] >= trainC && mealTimes[i] < wEnd) mealTimes[i] = wEnd;
+    }
+    for (let i = 1; i < mealTimes.length; i++) {
+      if (mealTimes[i] < mealTimes[i - 1]) mealTimes[i] = mealTimes[i - 1];
     }
   }
 
