@@ -749,12 +749,32 @@ function buildMealPlan(code, structure, timing = {}) {
       shakeKind,
       optional,
     };
-    const tgtIdx = shakeKind === 'anchor' ? 0 : Math.min(Math.max(deductIdx, 0), meals.length - 1);
-    const tgt = meals[tgtIdx];
-    const tp = Math.max(0, roundTo5g(tgt.protein - shake.protein));
-    const tc = Math.max(0, roundTo5g(tgt.carbs - shake.carbs));
-    tgt.protein = tp; tgt.carbs = tc;
-    tgt.kcal = roundToNearest50(tp * 4 + tgt.fat * 9 + tc * 4);
+    // How the shake's macros relate to the meals:
+    //  - OPTIONAL shake (e.g. a pre-workout drink for a fasted session): do NOT carve
+    //    it out of any meal. A client who skips it must still hit full protein, and a
+    //    single carved meal (e.g. 350 kcal / 15g) is too low-protein for any real meal
+    //    to match. The meals keep their full protein as if the shake weren't taken; the
+    //    optional shake sits on top for whoever wants it.
+    //  - BUDGETED shake (post-workout feed, morning anchor): it IS part of the day, so
+    //    spread its protein/carbs deduction EVENLY across every meal rather than carving
+    //    it out of one (which starves that meal), keeping the day on target.
+    if (!optional) {
+      const nReal = meals.length;
+      meals.forEach((m) => {
+        m.protein = Math.max(PROTEIN_FLOOR_G, roundTo5g(m.protein - shake.protein / nReal));
+        m.carbs = Math.max(0, roundTo5g(m.carbs - shake.carbs / nReal));
+        m.kcal = roundToNearest50(m.protein * 4 + m.fat * 9 + m.carbs * 4);
+      });
+      // Per-meal 50-kcal rounding (and the shake's tiny carb spreading to ~nothing)
+      // can leave the day off target; close the gap on the largest meal's carbs so
+      // meals + shake still sum to target.
+      const want = code.target - shake.kcal;
+      const sumK = () => meals.reduce((s, m) => s + m.kcal, 0);
+      const biggest = () => { let b = 0; for (let i = 1; i < meals.length; i++) if (meals[i].kcal > meals[b].kcal) b = i; return b; };
+      let guard = 0;
+      while (sumK() - want >= 50 && guard++ < 50) { const b = biggest(); if (meals[b].carbs < 5) break; meals[b].carbs = roundTo5g(meals[b].carbs - 5); meals[b].kcal = roundToNearest50(meals[b].protein * 4 + meals[b].fat * 9 + meals[b].carbs * 4); }
+      while (want - sumK() >= 50 && guard++ < 50) { const b = biggest(); meals[b].carbs = roundTo5g(meals[b].carbs + 5); meals[b].kcal = roundToNearest50(meals[b].protein * 4 + meals[b].fat * 9 + meals[b].carbs * 4); }
+    }
     if (shakeKind === 'post') meals.push(shake);
     else meals.unshift(shake);
   }
@@ -2321,6 +2341,9 @@ const TimelinePreview = ({ structure, personalization, meals }) => {
             </div>
           );
         })}
+      </div>
+      <div className="mt-4 pt-3 border-t border-stone-200 text-xs text-stone-500 leading-relaxed">
+        Feel free to adjust the meal times a bit earlier or later to perfectly suit your schedule.
       </div>
     </div>
   );
