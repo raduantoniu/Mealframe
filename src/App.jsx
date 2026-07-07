@@ -265,6 +265,21 @@ function decodeMacroMetricCode(raw) {
   return { ok: true, data };
 }
 
+// Build the same macro object decodeMacroMetricCode produces, but from hand-entered
+// numbers (the "Build from custom macros" path). Carbs already fill the calories left
+// after protein and fat; fiber is 14g per 1000 kcal. Fields the cut engine never reads
+// (tier, weight, height, maintenance) get harmless defaults; the cut structure comes
+// entirely from the questionnaire, and the reload ID embeds the macros directly.
+function buildCustomCode({ direction, target, protein, fat, carbs, fiber }) {
+  const d = new Date();
+  const genDate = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+  return {
+    units: 'metric', direction, target, protein, fat, carbs, fiber,
+    tier: 'intermediate', tierIdx: 1, subBracket: 1,
+    weight: 0, height: 0, maintenance: 0, genDate,
+  };
+}
+
 const subBracketTierLabel = (tier, sub) => {
   const t = { novice: 'Novice', intermediate: 'Intermediate', proficient: 'Proficient', advanced: 'Advanced' }[tier] || 'Novice';
   const w = { 0: 'Low', 1: '', 2: 'High' }[sub];
@@ -1748,7 +1763,7 @@ const QAItem = ({ question, children }) => {
 // SCREENS
 // =====================================================
 
-const LandingScreen = ({ onStart, onDecode }) => (
+const LandingScreen = ({ onStart, onDecode, onCustom }) => (
   <Card className="max-w-3xl">
     <div className="grid md:grid-cols-2 gap-10 items-center">
       <div>
@@ -1769,7 +1784,10 @@ const LandingScreen = ({ onStart, onDecode }) => (
         </ul>
         <div className="mt-5"><PrimaryButton onClick={onStart}>Build my meal structure <ArrowRight className="w-4 h-4" /></PrimaryButton></div>
         <button onClick={onDecode} className="mt-2 w-full bg-stone-50 hover:bg-stone-100 text-stone-900 font-medium py-3.5 px-6 rounded-full transition-colors text-sm border border-stone-200">
-          I already have a MealFrame™ ID
+          Load a MealFrame™ ID
+        </button>
+        <button onClick={onCustom} className="mt-2 w-full bg-stone-50 hover:bg-stone-100 text-stone-900 font-medium py-3.5 px-6 rounded-full transition-colors text-sm border border-stone-200">
+          Build from custom macros
         </button>
         <p className="text-xs text-stone-500 text-center mt-3">Takes about 3 minutes.</p>
       </div>
@@ -1846,6 +1864,80 @@ const IntroScreen = ({ code, units, onContinue, onBack }) => {
 };
 
 const PER_PAGE = 3;
+const CustomMacrosScreen = ({ onBuild, onBack }) => {
+  const [calories, setCalories] = useState('');
+  const [protein, setProtein] = useState('');
+  const [fat, setFat] = useState('');
+
+  const cal = parseInt(calories, 10);
+  const p = parseInt(protein, 10);
+  const f = parseInt(fat, 10);
+  const valid = !isNaN(cal) && cal > 0 && !isNaN(p) && p >= 0 && !isNaN(f) && f >= 0;
+  const carbsRaw = valid ? (cal - p * 4 - f * 9) / 4 : null;
+  const carbs = carbsRaw !== null ? Math.round(carbsRaw) : null;
+  const fiber = !isNaN(cal) && cal > 0 ? Math.round((cal / 1000) * 14) : null;
+  const overshoot = valid && carbsRaw < 0;
+  const lowFat = valid && f < 60;
+  const lowCarb = valid && !overshoot && carbs < 100;
+  const canBuild = valid && !overshoot;
+
+  const inputCls = 'mt-1 w-full px-3 py-3 rounded-lg border border-stone-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500';
+
+  const submit = () => {
+    if (!canBuild) return;
+    onBuild({ direction: 'cut', target: cal, protein: p, fat: f, carbs: Math.max(0, carbs), fiber });
+  };
+
+  return (
+    <Card>
+      <BackButton onClick={onBack} />
+      <span className="text-xs font-semibold text-stone-400 tracking-widest uppercase">Your own numbers</span>
+      <h2 className="mt-2 text-2xl font-bold text-stone-900">Build from custom macros</h2>
+      <p className="text-stone-600 mt-2 text-sm">Already know your targets? Enter them here and MealFrame builds your structure around them, no MacroMetric™ code needed.</p>
+
+      <div className="mt-5">
+        <label className="text-sm font-medium text-stone-700">Goal</label>
+        <div className="mt-1 grid grid-cols-2 gap-2">
+          <div className="rounded-lg border-2 border-orange-500 bg-orange-50 text-orange-700 font-semibold py-2.5 text-center text-sm">Cut</div>
+          <div className="rounded-lg border border-stone-200 bg-stone-50 text-stone-400 py-2.5 text-center text-sm">Bulk <span className="text-xs">· coming soon</span></div>
+        </div>
+      </div>
+
+      <div className="mt-4 grid grid-cols-3 gap-2">
+        <div>
+          <label className="text-sm font-medium text-stone-700">Calories</label>
+          <input type="number" inputMode="numeric" min="0" value={calories} onChange={(e) => setCalories(e.target.value)} placeholder="2000" className={inputCls} />
+        </div>
+        <div>
+          <label className="text-sm font-medium text-stone-700">Protein</label>
+          <input type="number" inputMode="numeric" min="0" value={protein} onChange={(e) => setProtein(e.target.value)} placeholder="150" className={inputCls} />
+        </div>
+        <div>
+          <label className="text-sm font-medium text-stone-700">Fat</label>
+          <input type="number" inputMode="numeric" min="0" value={fat} onChange={(e) => setFat(e.target.value)} placeholder="60" className={inputCls} />
+        </div>
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-sm">
+        <span><span className="text-stone-500">Carbs</span> <span className="font-semibold text-stone-900">{overshoot || carbs === null ? '—' : `${carbs}g`}</span> <span className="text-xs text-stone-400">fills the rest</span></span>
+        <span><span className="text-stone-500">Fiber</span> <span className="font-semibold text-stone-900">{fiber === null ? '—' : `${fiber}g`}</span> <span className="text-xs text-stone-400">auto</span></span>
+      </div>
+
+      {overshoot && <p className="text-sm text-red-600 mt-3">Your protein and fat already use more than your calories. Lower one, or raise your calories.</p>}
+      {!overshoot && (lowFat || lowCarb) && (
+        <p className="text-sm text-amber-700 mt-3">{lowFat ? 'Fat is below the ~60g floor. ' : ''}{lowCarb ? 'Carbs land below the ~100g floor. ' : ''}You can still proceed, but staying under these long-term tends to cost you on hormones, sleep, and training.</p>
+      )}
+
+      <div className="mt-4 bg-stone-50 border border-stone-200 rounded-xl p-4 text-sm text-stone-700 leading-relaxed">
+        <div className="font-semibold text-stone-900 mb-1">How to use these numbers</div>
+        Hit your calories and protein. Those two drive your results. Fat and carbs are floors, not exact targets: keep fat around 60g and up, and let carbs fill the rest, staying around 100g and up on a cut.
+      </div>
+
+      <PrimaryButton onClick={submit} disabled={!canBuild} className="mt-5">Review my targets <ArrowRight className="w-4 h-4" /></PrimaryButton>
+    </Card>
+  );
+};
+
 const QuestionnaireScreen = ({ direction, answers, setAnswers, onComplete, onBack }) => {
   const questions = direction === 'cut' ? CUT_QUESTIONS : BULK_QUESTIONS;
   const pages = [];
@@ -2602,6 +2694,7 @@ export default function App() {
   const [templateId, setTemplateId] = useState('');
   const [alternative, setAlternative] = useState(null);
   const [decodedMode, setDecodedMode] = useState(false);
+  const [customMode, setCustomMode] = useState(false);
 
   useEffect(() => {
     try {
@@ -2711,20 +2804,33 @@ export default function App() {
   const restart = () => {
     setScreen('landing'); setCode(null); setPastedCode(''); setCodeError(null);
     setAnswers({}); setTimes(null); setStructure(null); setPlan(null); setPersonalization(null);
-    setTemplateId(''); setDecodedMode(false); setAlternative(null);
+    setTemplateId(''); setDecodedMode(false); setAlternative(null); setCustomMode(false);
   };
 
   return (
     <Container>
-      {screen === 'landing' && <LandingScreen onStart={() => setScreen('code')} onDecode={() => setScreen('decode_id')} />}
+      {screen === 'landing' && <LandingScreen
+        onStart={() => { setCustomMode(false); setScreen('code'); }}
+        onDecode={() => setScreen('decode_id')}
+        onCustom={() => setScreen('custom')} />}
+
+      {screen === 'custom' && (
+        <CustomMacrosScreen
+          onBuild={(m) => {
+            const c = buildCustomCode(m);
+            setCode(c); setUnits('metric'); setPastedCode(''); setCodeError(null);
+            setCustomMode(true); setDecodedMode(false); setScreen('intro');
+          }}
+          onBack={() => setScreen('landing')} />
+      )}
 
       {screen === 'code' && (
         <CodeScreen initialCode={pastedCode} initialError={codeError}
-          onDecoded={(data, c) => { setCode(data); setUnits(data.units); setPastedCode(c); setCodeError(null); setScreen('intro'); }}
+          onDecoded={(data, c) => { setCode(data); setUnits(data.units); setPastedCode(c); setCodeError(null); setCustomMode(false); setScreen('intro'); }}
           onBack={() => setScreen('landing')} />
       )}
       {screen === 'intro' && code && (
-        <IntroScreen code={code} units={units} onContinue={() => setScreen('questionnaire')} onBack={() => setScreen('code')} />
+        <IntroScreen code={code} units={units} onContinue={() => setScreen('questionnaire')} onBack={() => setScreen(customMode ? 'custom' : 'code')} />
       )}
       {screen === 'questionnaire' && code && (
         <QuestionnaireScreen direction={code.direction} answers={answers} setAnswers={setAnswers}
