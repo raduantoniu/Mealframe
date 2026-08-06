@@ -2148,7 +2148,20 @@ function selectCarousels(realMeals, structure, answers){
     }
 
     picked.forEach(o=>{ if(o.m.vg) usedVg.add(o.m.vg); usedIds.add(o.m.id); });
-    carousels.push({ K, P, options: picked.map(o=>({
+
+    // Display order. The category-balanced picker tends to surface the single
+    // "at least one vegan" option first for a non-vegan user, which reads oddly.
+    // Re-order the chosen options for display by fit so a standard option leads;
+    // if the user isn't vegan and a vegan option is in front, push it to the back.
+    // Selection is unchanged — same meals, different order. (Applies to cut and bulk.)
+    let display = picked;
+    if (!restriction.includes('vegan')) {
+      display = picked.slice().sort((a,b)=> fit(a.solved)-fit(b.solved) || (a.m.id<b.m.id?-1:1));
+      const vi = display.findIndex(x=>isVegan(x.m));
+      if (vi > -1) { const [v] = display.splice(vi,1); display.push(v); }
+    }
+
+    carousels.push({ K, P, options: display.map(o=>({
       id:o.m.id, name:o.m.name, img:'/meals/'+o.m.id+'.jpg', vegan:isVegan(o.m), recipe:needsRecipe(o.m),
       kcal:o.solved.kcal, protein:o.solved.protein, carbs:o.solved.carbs, fat:o.solved.fat, fiber:o.solved.fiber,
       density:o.solved.density, portions:o.solved.portions, steps:STEPS[o.m.id]||[],
