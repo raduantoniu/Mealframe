@@ -1408,9 +1408,184 @@ function buildCutDayCopy(code, structure, personalization, answers) {
   return lines;
 }
 
+// =====================================================
+// BULK "How to Run Your Day" + "Your Bulk Type" COPY
+// =====================================================
+// Two fields: bulkType (framing, shown first) and howToRun (tactical). Fragments
+// are chosen by the answers. Copy approved separately; this is the bank + router.
+
+const BULK_COPY = {
+  // ---- Your Bulk Type (framing) : barrier x type ----
+  barrier: {
+    hardgainer_phys: "Your body naturally resists gaining weight. When you push into a surplus, your appetite drops and your energy expenditure climbs, and together they burn off part of the extra food you eat. That sounds like bad news, but being a hard gainer is usually an advantage. Naturally lean lifters tend to build muscle with less fat and end up with the most impressive transformations. The whole challenge for you is finding a way to eat enough, consistently, without your appetite shutting the process down. This is the opposite of a cut. Everything below is built to get more food into your day with less effort.",
+    hardgainer_phys_levers: [
+      "Add a meal. Going from three feedings to four, or four to five, is the simplest way to raise your intake without making any single meal a chore.",
+      "Add snacks between meals. High-protein, calorie-dense options work best: nuts, seeds, dried fruit, trail mix, cereal or protein bars, bagels. Keep them in reach at your desk or in your bag so eating one is the default, not a decision.",
+      "Eat more calorie-dense food at your main meals. Denser food means more calories for the same volume, so you get full less quickly. The meal examples show you which options do this.",
+      "Add fat to your cooking. Oil is the easiest way to add calories. One caveat: keep fat under about 30 to 35 percent of your daily calories and build the rest of the surplus from carbs. Dietary fat is stored as body fat more readily than carbs are, so a carb-led surplus tends to add slightly less fat.",
+      "Use liquid calories. Drinks bypass the fullness that solid food creates, which is exactly what you want here. Milk, soy milk, a shake, flavored oat milk, or juice all move the needle without filling you up.",
+      "Don't overdo fiber. Vegetables and whole grains are fine, but you don't need to load them the way a cut does. Leave room for white rice, pasta, bread, and cereal so volume doesn't cap your intake before your calories do.",
+    ],
+    hardgainer_logistics: "The thing standing between you and gaining weight isn't your appetite, it's access. You end up under your target because food isn't there when you need it, or you're too busy to sit down and eat what you planned. Fix the logistics and the weight follows.\n\nStart with groceries. If the food isn't in the house, you skip meals or fall back on whatever's around, and neither hits your numbers. Pick one day a week, shop once, and buy everything you'll need for the next five to seven days. Make it a fixed habit, not a when-I-remember one.\n\nThen handle work. Most under-eating happens during the workday, either because there's no good food available or because you're too busy to eat the large meals you need. Meal prep solves both. Cook at home, portion into containers, and bring them with you. Eat at your desk or on your break. It's the cheapest, most reliable way to guarantee your intake. Ordering in works too, but it costs more and it's less consistent, since you don't control the ingredients and some days you'll skip it. A work cafeteria is fine as well. On a bulk you have a lot of freedom in what you can eat, and because the meals are large, you hit your protein without much effort.\n\nSnacks cover the gaps. When there's no time for a real meal, a snack keeps your intake on track. Keep some at work and eat them whenever a meal isn't going to happen.",
+    hardgainer_psych: "You have the appetite issues of a hard gainer, but the real thing holding you back is that you won't let yourself gain. A lot of under-eaters are quietly afraid of getting fat. They won't allow the scale to climb, so they pull back after a few higher-calorie days, and the surplus never adds up to anything. They're trying to build muscle with essentially no fat gain, and it rarely works. What usually happens instead is months or years of spinning your wheels with nothing to show for it.\n\nThis is worth naming plainly, because it's the actual barrier. When there's a gap between how you see yourself and the goal you say you want, you sabotage the goal without meaning to. It feels like you'd lose your identity if you changed. On a bulk that shows up as never fully committing: always second-guessing, always finding a reason to pull back to cutting or to hold on to a certain level of leanness.\n\nThe fix is to commit to the bulk. Staying lean-obsessed is the surest way to stay the same size for years. Accept that you'll look a little softer in the short term, because that's the cost of building real muscle and size. You want the bigger frame. The bulk is how you get it. Everything below assumes you're in.",
+    balanced_logistics: "You gain fine when you actually eat enough. The reason past bulks haven't stuck is organization, not appetite or biology. Food isn't there when you need it, or the day gets away from you and meals get skipped. So your plan is a normal, moderate-density bulk, and the work is on the logistics around it.\n\nThe two fixes that matter most: shop once a week for everything you'll need over the next five to seven days, so the food is always in the house, and prep your daytime meals in containers so a busy workday can't knock you off target. Get those two habits in place and your intake takes care of itself. The structure below handles the timing; the meal examples handle the food.",
+    cautious: "When you bulk, you overshoot. You gain too fast and the weight comes on as fat, either because holding the target surplus takes willpower or because eating intuitively puts you well over it. So we treat your bulk a lot like a cut: the structure and the food choices are there to keep a lid on calories, not to pile them on.\n\nA few things make restraint easier.\n\nEat on a schedule. Same times, similar amounts, similar foods each day. When your intake is consistent, your appetite adapts to it and stops pushing you past your target.\n\nSkip the snacks. You don't need calories stacked on top of your meals, so your plan doesn't put any there. Your meals are built to hit your number on their own.\n\nChoose lower-density food. Enjoyable, but not the hyper-palatable stuff that's easy to overeat. More volume for the same calories keeps you full without the surplus getting away from you. The meal structure and examples below show you what that looks like.",
+    balanced_psych: "You gain fine when you commit, but the real thing holding you back is that you won't let yourself gain. A lot of lifters in your position are quietly afraid of getting fat. They won't allow the scale to climb, so they pull back after a few higher-calorie days, and the surplus never adds up to anything. They're trying to build muscle with essentially no fat gain, and it rarely works. What usually happens instead is months or years of spinning your wheels with nothing to show for it.\n\nThis is worth naming plainly, because it's the actual barrier. When there's a gap between how you see yourself and the goal you say you want, you sabotage the goal without meaning to. It feels like you'd lose your identity if you changed. On a bulk that shows up as never fully committing: always second-guessing, always finding a reason to pull back to cutting or to hold on to a certain level of leanness.\n\nThe fix is to commit to the bulk. Staying lean-obsessed is the surest way to stay the same size for years. Accept that you'll look a little softer in the short term, because that's the cost of building real muscle and size. You want the bigger frame. The bulk is how you get it. Your plan is a straightforward, moderate-density bulk; the rest is about actually running it.",
+    balanced_default: "You gain weight at a reasonable rate without much drama. You don't have to force food down, and you don't have to fight to hold the line either, so your plan is a straightforward bulk: a normal number of meals at a moderate calorie density, with snacks available if you want them but never required. We're not loading vegetables to blunt your hunger, and we're not leaning on junk to hit the surplus. The goal is simply to eat enough good food, consistently, at the right times around your training. The structure below handles the timing; the meal examples handle the food.",
+    never: "You haven't really run a proper bulk before, so there's no pattern to correct, which means we start you on the sensible default and adjust from there. That default is a balanced bulk: a normal number of meals at a moderate calorie density, enough food to gain at a controlled rate without piling on fat, snacks available if you want them but never required. It assumes you're neither a hard gainer who has to force food down nor someone who gains too fast and needs the brakes on. Most people land here.\n\nRun this for a few weeks and watch the scale. If the weight isn't moving and eating enough feels like a chore, you lean toward hard gainer, and you'd add feedings, snacks, and denser food. If it's climbing too fast and the fat is coming on quickly, you lean toward needing restraint, and you'd tighten the food choices and cut the snacks. Once you know which way you run, your next plan gets more specific. For now, the structure below is where to start.",
+  },
+
+  // ---- Morning (Q3) ----
+  morning: {
+    breakfast: "It helps that you're hungry in the morning, because it makes protein distribution easy. Muscle growth is slightly better when protein is spread more or less evenly across three to five meals, each with at least 20 to 30g of protein. Total daily protein still matters most by far, but distribution is a free bonus, and eating breakfast means you get it without trying. Each protein feeding briefly raises muscle protein synthesis, so hitting that mark at breakfast, lunch, and dinner means you're already taking every opportunity to build tissue across the day. If your three meals each land 20 to 30g of protein, your distribution is already ideal and there's nothing else to manage here.",
+    light_ok: "You'd rather not eat much early, and that's fine, we don't force it. But a small protein feeding in the morning is worth keeping, and since you're happy with something light, we use that. A small meal with 20 to 30g of protein does the job, or a protein shake or a bar if that's easier. Either way you tick the morning-protein box while staying inside your preference. The reason it's worth doing: muscle growth is slightly better when protein is spread evenly throughout the day, across three to five feedings of 20 to 30g, because each feeding briefly raises muscle protein synthesis. A light morning protein hit lets you take that opportunity without eating a full breakfast you don't want.",
+    light_push: "You prefer to eat light in the morning, and that preference is part of why gaining has been hard for you. Keep your calories low in the morning and you're forced to make them up later with oversized meals or constant snacking, which hasn't worked. Eating more in the morning takes the pressure off the rest of the day and makes your target far easier to reach.\n\nYou don't have to eat a big breakfast if that's not you. But aim for 20 to 30g of protein and some real calories alongside it. That alone makes your daily target easier to hit, and it improves your results too: muscle growth is slightly better when protein is spread evenly throughout the day, across three to five feedings of 20 to 30g, because each feeding briefly raises muscle protein synthesis. A morning feeding is the one you've been leaving on the table.",
+    forced: "You tend to skip breakfast, and you also struggle to gain consistently. Those two things are connected. When you don't eat in the morning, you have to make up every one of those calories later, which means oversized meals or nonstop snacking, and it hasn't been working. So this plan puts a feeding in your morning even though it cuts against your habit.\n\nIt doesn't have to be big. Aim for 20 to 30g of protein and some calories with it. That one change makes your daily calorie target much easier to reach, and it improves your muscle-building results on top of that, because muscle growth is slightly better when protein is spread evenly throughout the day, across three to five feedings of 20 to 30g, and this takes advantage of every muscle-protein-synthesis spike instead of leaving the morning one unused.",
+    fast: "Skipping breakfast suits you, so we keep it. Because you tend to gain quickly, a short morning fast is actually useful here: it keeps your calories in check by leaving more food for later in the day, where it meets real hunger and gives you room for social meals. Until your first meal, drink water, black coffee, and zero-calorie drinks. Drink water on purpose rather than waiting to feel thirsty, since fasting suppresses thirst, at least half a liter before you eat. Black coffee blunts appetite well; if caffeine doesn't wreck your sleep, one to three cups across the morning makes the fast effortless. Diet soda and zero-calorie energy drinks work too.",
+  },
+
+  // ---- Daytime (Q4 daytime) ----
+  daytime: {
+    cook_gain: "You prepare and bring your own daytime meals, which is the ideal setup: exact portions, exact ingredients, easy to track. That matters, because the hard part of eating away from home is finding food that's high enough in protein and calories without being junk. Bringing your own removes the problem. Build these meals on a protein source and a starchy carb, and add fat as needed to reach your calories. The best move is to settle on a handful of meals you like and repeat them. Standardizing a few favorites removes daily food decisions, lets you buy ingredients in bulk, and trains your appetite to expect stable portions. Store them in your office fridge or bag; a few hours unrefrigerated won't spoil them. The meal examples give you a set to start from.",
+    cook_cautious: "You prepare and bring your own daytime meals, which is the ideal setup: exact portions, exact ingredients, easy to track. For you the goal is slightly different, since you gain easily, you want daytime meals that are high in protein but controlled in calories, so you don't overshoot or eat into the budget you'd rather keep for dinner. Bringing your own makes that easy. Build these on a lean protein source, vegetables, and a starchy carb, adding fat only as needed to hit your target. The best move is to settle on a handful of meals you like and repeat them. Standardizing a few favorites removes daily food decisions, lets you buy ingredients in bulk, and trains your appetite to expect stable portions. Store them in your office fridge or bag; a few hours unrefrigerated won't spoil them. The meal examples give you a set to start from.",
+    eatout_balanced: "Buying your daytime meals is fine on a bulk as long as you keep the protein reasonable. Order meat, dairy, eggs, or a plant protein like tofu, plus a carb and some veg, and you'll do well. The trap is defaulting to junk, so aim for mostly whole foods. Plenty of quick restaurant meals fit your daytime calories: sandwiches, a standard meat-and-rice plate, pasta, even pizza in the right portion. Scan a few local menus ahead of time, find the meals that fit your protein and calorie budget, and keep those in rotation. There are also meal-prep delivery services built to hit macro targets, which is an easy way to get prepped nutrition without cooking. That said, prepping your own is still worth considering, since you get full control over portions and ingredients and spend far less.",
+    eatout_hardgainer: "Buying your daytime meals is fine on a bulk as long as you keep the protein reasonable. Order meat, dairy, eggs, or a plant protein like tofu, plus a carb and some veg, and you'll do well. Since eating enough is the hard part for you, lean into the higher-calorie options: burgers, sandwiches, pizza, pasta all help you hit your surplus without a fight. Scan a few local menus ahead of time, find meals you actually enjoy that fit your protein and calorie budget, and keep those in rotation. There are also meal-prep delivery services built to hit macro targets, an easy way to get prepped nutrition without cooking. That said, prepping your own is still worth considering, since you get full control over portions and ingredients and spend far less.",
+    eatout_cautious: "Buying your daytime meals makes restraint harder, because most restaurant food is calorie-dense: sandwiches, pizza, pasta. It's easy to overshoot your daytime budget without noticing. The fix is to order lean protein and vegetables, a large salad with a double portion of grilled meat, or a burrito bowl with double meat, beans, and low-fat sauce. Scan a few local menus ahead of time, find the meals that fit your protein and calorie budget, and keep those in rotation. There are also meal-prep delivery services built to hit macro targets, which is an easy way to get controlled nutrition without cooking. That said, prepping your own is still worth considering, since you get full control over portions and ingredients and spend far less.",
+    none_cautious: "You tend to skip daytime meals, so there's no real lunch slot, you either skip it or grab something quick from a vending machine or a counter. On a bulk that backfires two ways: skipping makes it hard to hit your protein, and grab-and-go food is usually calorie-dense enough to push you over. The solution is to bring your own food that's easy to carry and quick to eat. Two options:\n\n1. Cook and bring meals in containers. Build them on a protein source, vegetables or fruit, and a starchy carb (potatoes, rice, pasta, bread). Settle on a handful you like and repeat them, it removes daily decisions, lets you buy in bulk, and steadies your appetite. Store them in your office fridge or bag; a few hours out won't spoil them.\n\n2. Use liquid meal replacements: a protein smoothie made ahead in a sealed bottle, or a single-serve meal replacement.\n\nThe meal examples show you what to pack.",
+    none_hardgainer: "Skipping daytime meals is one of the main reasons you struggle to hit your calories and add size. Every meal you skip has to be made up later, so you end up backloading the day and facing oversized meals at night, and with a lower appetite you either can't finish them or you just don't eat enough. Two ways to fix it:\n\n1. Cook and bring meals in containers. Build them on a protein source, vegetables or fruit, and a starchy carb (potatoes, rice, pasta, bread). Settle on a handful you like and repeat them, it removes daily decisions, lets you buy in bulk, and steadies your appetite. Store them in your office fridge or bag; a few hours out won't spoil them.\n\n2. Use liquid meal replacements: a protein smoothie made ahead in a sealed bottle, or a single-serve meal replacement. Liquids are especially useful for you, since they add calories without the fullness solid food creates.\n\nThe meal examples show you what to pack.",
+    none_balanced: "Skipping daytime meals makes your calorie target harder to reach and affects your protein distribution. It can still work, as long as you eat enough overall, this is secondary, and you've gained fine before eating light in the day. But if hitting your target starts to feel like a chore, add daytime food so you're not stuck with huge meals at night. A few options:\n\n1. Cook and bring meals in containers. Build them on a protein source, vegetables or fruit, and a starchy carb. Settle on a handful you like and repeat them; it removes daily decisions and steadies your appetite. A few hours out of the fridge won't spoil them.\n\n2. Use liquid meal replacements: a protein smoothie made ahead, or a single-serve product.\n\n3. Grab food on the go. Bulking is forgiving with food choices, so a sandwich, a pretzel, or something quick is fine here. As long as you hit your daily protein, these fast meals help you reach your calories.\n\nThe meal examples show you what to pack.",
+    wfh: "Working from home is the ideal setup. You can prep ahead or cook fresh, weigh everything, and keep full control of the ingredients. The best move is to settle on a handful of meals you like and repeat them, which removes daily food decisions, lets you stock ingredients in bulk, and steadies your appetite around stable portions. Build your meals on a protein source, some starchy carbs, and vegetables, so you hit protein, get enough volume, and reach your calories. You can also snack whenever you need to at home. The meal examples give you a starting framework.",
+  },
+
+  // ---- Evening (Q5 evening) ----
+  evening: {
+    hungry_cautious: "Your appetite is strongest at night, so your plan matches it: most of your food lands in the evening. Working with your hunger instead of against it makes the day easier, and it's easier to stay controlled earlier when you know your biggest meal is waiting at the end. Keep the earlier meals lighter and higher in protein so you arrive at the evening with room to eat, and let the night meal be the large one. The one thing to watch is that \"hungry at night\" doesn't turn into eating past your target, so keep the evening meal planned rather than open-ended.",
+    hungry_gain: "Your appetite is strongest at night, so your plan matches it: most of your food lands in the evening. That's an advantage here, it lets you put the most food where your hunger actually is, when you have access to plenty of it and can eat what you enjoy. Use it. The evening is where the bulk of your calories and your largest meal belong, so lean into it rather than forcing food earlier when you don't want it.",
+    onlytime: "Evenings are when you actually have time to eat, so your plan puts more of your food there. This works with your schedule instead of against it. Keep your daytime meals smaller and simpler, then eat the larger share at night, when you can cook properly, have plenty of food on hand, and eat what you enjoy. The structure below already shifts your calories this way, so you're not trying to force big meals into a workday that has no room for them.",
+    habit_cautious: "Gaining too much fat in past bulks usually comes from this exact window, the stretch between getting home and going to bed, often in front of a screen. Your plan gives that window real food: a proper dinner and some snacks if they fit. But the point is to eat with intent here, not to graze freely. Control the food choices, keep the portions set, and log what you eat before you eat it so you don't sail past your budget.\n\nThe trick isn't willpower, it's your food environment. If cravings and boredom eating have wrecked bulks before, it usually comes down to keeping trigger foods in the house, buying them in big packages, and leaving them in sight. Fix the environment and most of the willpower problem disappears. Buy only what you'll eat in one sitting, in single-serving packaging, 200 to 400 calories, and let the empty wrapper be the signal that you're done. Opening a second package feels different from taking more from an open bag, and that difference is what keeps the portion in check. Keep anything ready-to-eat out of sight, behind other things, hard to reach. A small obstacle between your hand and the food is often enough.",
+    habit_hardgainer: "Eating to decompress at night can actually work in your favor. If you enjoy eating in front of a screen, use it, time your snacks for the evening. Most people eat more when they're eating distractedly, and for you that's a feature, not a bug. If a relaxed evening makes it easier to get more food down, lean on it to help hit your surplus.",
+    habit_balanced: "You tend to eat more in the evening to unwind. Your plan matches that by placing more of your food there, which gives you the room to do it. It lets you eat more when you're relaxed and hungry, have plenty of food on hand, and can eat what you enjoy. Just keep the evening meal a planned one rather than an open-ended graze, and it works in your favor.",
+  },
+
+  // ---- Dinner (Q6 dinner) ----
+  dinner: {
+    control: "You control your dinner, which is the ideal situation. You choose the ingredients, set the portion, and weigh exactly what you eat. The best strategy is to settle on a few dinner options you enjoy and rotate them. But dinner is also where you get to include the foods you crave and add some variety. If your earlier meals are more standardized, dinner is where you can loosen the structure and enjoy some flexibility while still hitting your target.",
+    family_cautious: "Someone else cooks your dinner and you eat it together, and that's something we build around, not something to avoid. Shared meals are deeply human. Eating alone might make planning easier, but it also breeds isolation and friction at home, and we don't want that. So the plan is built around that shared dinner: your earlier meals run a bit lower in calories, which banks a good part of your day for the evening, and your budget leaves room for a normal family dinner in normal portions.\n\nIf you tend to overeat at that dinner, the fix is to add food, not remove it. Have a little less of what's served and add a portion of plain protein on the side (extra chicken, a scoop of cottage cheese, a block of tofu) plus some vegetables or mushrooms. Adding food is far easier to justify socially than refusing it, and it lowers the calorie density of the meal, adds volume, and leaves you full without pushing you over.",
+    family_balanced: "Someone else cooks your dinner and you eat it together, and that's something we build around, not something to avoid. Shared meals are deeply human. Eating alone might make planning easier, but it also breeds isolation and friction at home, and we don't want that. So the plan is built around that shared dinner: your earlier meals run a bit lower in calories, which banks a good part of your day for the evening, and your budget leaves room for a normal family dinner in normal portions.",
+    family_hardgainer: "Someone else cooks your dinner and you eat it together, and that's something we build around, not something to avoid. Shared meals are deeply human. Eating alone might make planning easier, but it also breeds isolation and friction at home, and we don't want that. So the plan is built around that shared dinner.\n\nIf you tend to come up short at dinner, the fix is to add calories on the side. Eat what's served and add some extra oil, a dessert, or some liquid calories alongside it. Adding food is far easier to justify socially than refusing it, and it raises the calorie density of the meal so you actually reach your target.",
+    social_cautious: "You eat dinner out often, which makes restraint the challenge, since restaurant food is calorie-dense and easy to overshoot. Keep your earlier meals lighter and higher in protein so you arrive with a controlled budget rather than a blank check. Order well: lean meat with a side of vegetables or potatoes gives you the most food for the calories. Check the menu before you go and decide what you'll order, so the choice is made before the table talks you into something bigger. An occasional larger night is fine on a bulk, you have the room, but you don't want every dinner running over.",
+    social_balanced: "You eat dinner out often, and on a bulk that's easy to work with. Keep your earlier meals reasonable and you arrive at dinner with a comfortable budget that fits most restaurant meals, a plate of pasta, a burger, meat and potatoes, without much thought. The one thing worth doing is favoring higher-protein options where you can, since restaurant food tends to run low on protein and high on everything else. Beyond that, enjoy it, this is one of the easier situations to bulk in.",
+    social_hardgainer: "You eat dinner out often, which actually helps you, restaurant food is calorie-dense, and that's exactly what you need. The one thing to stay on top of is protein, since restaurant meals lean carb- and fat-heavy. Build your order on a protein source (meat, fish, dairy, plant protein) and let the rest of the plate carry the calories. Check the menu ahead of time, find a few high-protein meals you enjoy across your regular spots, and keep them in rotation so hitting protein doesn't depend on the night.",
+    varies: "Your dinner changes a lot from week to week, so we treat it as the flexible part of your day instead of fighting it. Lock in your earlier meals, enough protein, controlled calories, and leave a generous budget for the evening. That cushion covers almost any dinner that comes up, cooked at home, out with friends, or whatever the week throws at you. Over time, working toward a more predictable pattern helps, since the best results come from finding one system and repeating it, but the flexible-evening approach keeps you on track until then.",
+  },
+
+  // ---- Restriction (Q10) ----
+  restriction: {
+    nomeat: "You don't eat meat, so your protein comes from fish, eggs, dairy, soy, and legumes. The strategy stays the same, only the sourcing changes. Daytime meals you prep or bring should be built on those: fish, Greek yogurt and fruit, cottage cheese, protein oatmeal, tofu, mock meats. For dinners out, take the fish or plant options and check in advance what fits. Everything else in your plan stays the same.",
+    vegetarian: "You eat eggs and dairy but not meat or fish, so your protein comes from cheese, eggs, soy (tofu, mock meats), and dairy. Build your daytime meals on those: protein oatmeal, Greek yogurt with fruit, cottage cheese, eggs, tofu. For dinners out, take the vegetarian or vegan options, and it's worth choosing vegetarian or vegan places in the first place, since a standard menu leaves you few choices.",
+    vegan: [
+      "You're vegan, which changes the approach more than any other restriction, and it's one I follow myself, so the plan accounts for it properly. The main difference is that there is no separate protein source. Every food you eat has to carry a meaningful amount of protein, because your protein, carbs, and fat all come from the same foods. That makes planning essential. The good news is that calories are the easy part for you on a bulk, nuts, nut butters, oils, tahini, seeds, and dense grains add a surplus without much volume, so hitting your target is rarely the problem. Protein is. Prepping your own food is close to mandatory, especially away from home, where high-protein vegan options barely exist. If you already cook and bring your own, keep doing exactly that. If you currently buy lunch, the honest advice is to switch to prepping. For dinners out, confirm in advance that the place has real vegan options, otherwise you'll be left with fries and a side salad, which won't touch your protein.",
+      "Protein powder matters more here than on any other plan. A day that works well: a smoothie with a scoop and a half of plant protein, a banana, peanut butter, and oats blended in, which is calorie-dense and gives you around 45g of protein to start the day. For a second meal, a Buddha bowl (smoked tofu, green beans, carrots, lentils, hummus) for fiber and another 50g of protein. For dinner, something varied and generous: mock meats with potatoes, lentil or chickpea pasta with plant mince and tomato sauce, or high-protein wraps, with oil or avocado added to push the calories. A vegan bulk absolutely hits protein and reaches a surplus. It just takes more planning and more attention to detail than any other version.",
+    ],
+    pescatarian: "You eat fish but not meat, so swap every mention of meat for fish. Build your daytime meals on fish and plant protein (tofu, mock meats): tuna salad, fish with vegetables, protein oatmeal. Fattier fish like salmon and mackerel are useful here, since they add calories along with the protein. For dinners out, take the fish or plant options, and fish-based or plant-forward places give you the most room.",
+    nopork: "You don't eat pork, which has almost no effect on the plan. We simply keep pork out of your meal examples (no sausages or pork tenderloin). Everything else stays the same.",
+    nodairy: "You don't eat dairy, so anywhere the plan leans on cheese or yogurt, your protein comes from meat, plant options, and protein powder instead. The structure stays the same, only the sourcing shifts.",
+    gluten: "You avoid gluten, so the plan keeps bread and pasta out of your meals and examples. Nothing structural changes; your protein and the rest of your food stay as written.",
+  },
+};
+
+// Assemble the two bulk copy fields from the answers.
+function buildBulkDayCopy(code, structure, personalization, answers) {
+  const a = answers || {};
+  const fl = structure.flags || {};
+  const type = structure.bulkType || fl.bulkType || 'balanced';
+  const barrier = structure.barrier || fl.barrier || 'none';
+  const C = BULK_COPY;
+
+  // ---------- FIELD 1: Your Bulk Type (framing) ----------
+  // The BARRIER (why he struggles) leads the framing, not the structure. A lifter
+  // can be balanced-structure but come in for logistics (1b) or psychology (1c),
+  // and the opening should speak to that reason. Structure still decides the plan;
+  // this only decides which "why" narrative he reads.
+  const bulkType = [];
+  const g = a.gainExperience;
+  if (type === 'hardgainer') {
+    if (barrier === 'logistical') bulkType.push(C.barrier.hardgainer_logistics);
+    else if (barrier === 'psychological') bulkType.push(C.barrier.hardgainer_psych);
+    else { bulkType.push(C.barrier.hardgainer_phys); C.barrier.hardgainer_phys_levers.forEach((l) => bulkType.push(l)); }
+  } else if (type === 'cautious') {
+    bulkType.push(C.barrier.cautious);
+  } else { // balanced structure — but let the barrier pick the narrative
+    if (g === 'never') bulkType.push(C.barrier.never);
+    else if (barrier === 'logistical') bulkType.push(C.barrier.balanced_logistics);   // 1b
+    else if (barrier === 'psychological') bulkType.push(C.barrier.balanced_psych);     // 1c
+    else bulkType.push(C.barrier.balanced_default);                                     // 1d/1f neutral
+  }
+
+  // ---------- FIELD 2: How to Run Your Day (tactical) ----------
+  const howToRun = [];
+
+  // Restriction preamble (one strictest diet block + gluten if flagged).
+  const restr = a.restriction || fl.restriction || ['none'];
+  const has = (x) => restr.includes(x);
+  let diet = null;
+  if (has('vegan')) diet = C.restriction.vegan;
+  else if (has('vegetarian')) diet = [C.restriction.vegetarian];
+  else if (has('pescatarian')) diet = [C.restriction.pescatarian];
+  else if (has('nomeat')) diet = [C.restriction.nomeat];
+  else if (has('nodairy')) diet = [C.restriction.nodairy];
+  else if (has('nopork')) diet = [C.restriction.nopork];
+  if (diet) diet.forEach((d) => howToRun.push(d));
+  if (has('gluten') || has('allergy')) howToRun.push(C.restriction.gluten);
+
+  // Morning — driven by the resolved morningMode + gain-risk.
+  const gainRisk = fl.gainRisk;
+  const mm = structure.morningMode;
+  if (mm === 'if' || mm === 'fasted') {
+    // fasted mode: fast copy only for cautious (restraint); otherwise no morning para
+    // (the fasted-morning eater just trains then eats — handled by structure, not copy).
+    if (type === 'cautious') howToRun.push(C.morning.fast);
+  } else if (mm === 'breakfast') {
+    howToRun.push(C.morning.breakfast);
+  } else if (mm === 'light_anchor') {
+    if (a.shape === 'skip') howToRun.push(C.morning.forced);        // forced feeding (3c, no fast)
+    else if (gainRisk) howToRun.push(C.morning.light_push);         // 3b + struggles
+    else howToRun.push(C.morning.light_ok);                          // 3b, no gain risk
+  }
+
+  // Daytime (Q4).
+  const dt = a.daytime;
+  if (dt === 'cook') howToRun.push(type === 'cautious' ? C.daytime.cook_cautious : C.daytime.cook_gain);
+  else if (dt === 'eatout') howToRun.push(type === 'cautious' ? C.daytime.eatout_cautious : type === 'hardgainer' ? C.daytime.eatout_hardgainer : C.daytime.eatout_balanced);
+  else if (dt === 'none') howToRun.push(type === 'cautious' ? C.daytime.none_cautious : type === 'hardgainer' ? C.daytime.none_hardgainer : C.daytime.none_balanced);
+  else if (dt === 'wfh') howToRun.push(C.daytime.wfh);
+
+  // Evening (Q5).
+  const ev = a.evening;
+  if (ev === 'hungry') howToRun.push(type === 'cautious' ? C.evening.hungry_cautious : C.evening.hungry_gain);
+  else if (ev === 'onlytime') howToRun.push(C.evening.onlytime);
+  else if (ev === 'habit') howToRun.push(type === 'cautious' ? C.evening.habit_cautious : type === 'hardgainer' ? C.evening.habit_hardgainer : C.evening.habit_balanced);
+  // ev === 'no' -> no fragment
+
+  // Dinner (Q6).
+  const dn = a.dinner;
+  if (dn === 'control') howToRun.push(C.dinner.control);
+  else if (dn === 'family') howToRun.push(type === 'cautious' ? C.dinner.family_cautious : type === 'hardgainer' ? C.dinner.family_hardgainer : C.dinner.family_balanced);
+  else if (dn === 'social') howToRun.push(type === 'cautious' ? C.dinner.social_cautious : type === 'hardgainer' ? C.dinner.social_hardgainer : C.dinner.social_balanced);
+  else if (dn === 'varies') howToRun.push(C.dinner.varies);
+
+  // Split any multi-paragraph fragments (they contain blank-line breaks) so each
+  // paragraph renders as its own <p>. Keeps single-paragraph fragments untouched.
+  const explode = (arr) => arr.reduce((out, s) => out.concat(String(s).split('\n\n')), []);
+  return { bulkType: explode(bulkType), howToRun: explode(howToRun) };
+}
+
 function buildDayCopy(code, structure, personalization, answers) {
   if (code.direction === 'cut' && answers && answers.morningHunger) {
     return buildCutDayCopy(code, structure, personalization, answers);
+  }
+  if (code.direction === 'bulk' && structure.bulkType) {
+    return buildBulkDayCopy(code, structure, personalization, answers);
   }
   return buildDescription(code, structure, personalization);
 }
@@ -2955,12 +3130,33 @@ const ResultsScreen = ({ code, structure, personalization, plan, templateId, alt
         </div>
       )}
 
-      <div className="mt-5 bg-orange-50 border border-orange-200 rounded-xl p-5">
-        <h3 className="font-semibold text-stone-900 text-sm mb-2">How to run your day</h3>
-        <div className="space-y-2 text-sm text-stone-700 leading-relaxed">
-          {prose.map((line, i) => <p key={i}>{line}</p>)}
+      {Array.isArray(prose) ? (
+        <div className="mt-5 bg-orange-50 border border-orange-200 rounded-xl p-5">
+          <h3 className="font-semibold text-stone-900 text-sm mb-2">How to run your day</h3>
+          <div className="space-y-2 text-sm text-stone-700 leading-relaxed">
+            {prose.map((line, i) => <p key={i}>{line}</p>)}
+          </div>
         </div>
-      </div>
+      ) : (
+        <>
+          {prose.bulkType && prose.bulkType.length > 0 && (
+            <div className="mt-5 bg-stone-50 border border-stone-200 rounded-xl p-5">
+              <h3 className="font-semibold text-stone-900 text-sm mb-2">Your bulk type</h3>
+              <div className="space-y-2 text-sm text-stone-700 leading-relaxed">
+                {prose.bulkType.map((line, i) => <p key={i}>{line}</p>)}
+              </div>
+            </div>
+          )}
+          {prose.howToRun && prose.howToRun.length > 0 && (
+            <div className="mt-5 bg-orange-50 border border-orange-200 rounded-xl p-5">
+              <h3 className="font-semibold text-stone-900 text-sm mb-2">How to run your day</h3>
+              <div className="space-y-2 text-sm text-stone-700 leading-relaxed">
+                {prose.howToRun.map((line, i) => <p key={i}>{line}</p>)}
+              </div>
+            </div>
+          )}
+        </>
+      )}
 
       <div className="mt-5">
         <h3 className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Meal-by-meal targets</h3>
