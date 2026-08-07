@@ -1779,6 +1779,35 @@ const MEALS = [
     diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:1},
     ings:[['Chicken breast',150,30,4.5,0,0,'P'],['Instant noodle pack',75,5.1,14.3,35,1.9,'S'],['Asian veggie mix (frozen)',300,6,0.9,24.4,8.4,'X'],['Oil',5,0,5,0,0,'X']] },
 
+  // ---------------- ADDED: BULK BATCH 1 (shared library, untagged) ----------------
+  { id:'cheese_pasta_gouda', name:'Cheese Pasta', band:[600,1200], mr:false, vg:null,
+    diet:{meat:0,pork:0,fish:0,dairy:1,egg:0,gluten:1},
+    ings:[['White pasta (dry)',200,26,3,149.3,6.4,'S'],['Gouda cheese',50,13,14,1.1,0,'P'],['Cheddar cheese',50,12,17,1.7,0,'P']] },
+  { id:'parmesan_spaghetti', name:'Cacio e Pepe', band:[600,1200], mr:false, vg:null,
+    diet:{meat:0,pork:0,fish:0,dairy:1,egg:0,gluten:1},
+    ings:[['White pasta (dry)',200,26,3,149.3,6.4,'S'],['Parmesan',50,18,13,1.7,0,'P'],['Olive oil',20,0,20,0,0,'X'],['Black pepper',3,0.3,0.1,1.6,0.8,'X']] },
+  { id:'spaghetti_bolognaise', name:'Spaghetti Bolognaise', band:[600,1200], mr:false, vg:null,
+    diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:1},
+    ings:[['White pasta (dry)',200,26,3,149.3,6.4,'S'],['Bolognaise sauce (canned)',400,19.6,12.4,26,0,'P']] },
+  { id:'pb_banana_toast', name:'Peanut Butter & Banana Toast', band:[600,1200], mr:false, vg:'pb_banana',
+    diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:1},
+    ings:[['White bread (6 slices)',180,16,6,85,4.9,'S'],['Peanut butter',75,17,38,13,3.7,'P'],['Medium bananas (x2)',240,2.6,0.8,48,6.2,'X']] },
+  { id:'buttered_rice_eggs', name:'Buttered Rice with Fried Eggs', band:[600,1200], mr:false, vg:null,
+    diet:{meat:0,pork:0,fish:0,dairy:1,egg:1,gluten:0},
+    ings:[['White rice',160,11.4,1.2,126,2,'S'],['Large eggs (x3)',150,18,15,0,0,'P'],['Butter',20,0.2,16,0,0,'X']] },
+  { id:'cheese_quesadillas', name:'Cheese & Bean Quesadillas', band:[600,1200], mr:false, vg:null,
+    diet:{meat:0,pork:0,fish:0,dairy:1,egg:0,gluten:1},
+    ings:[['Whole wheat tortillas (x3)',195,19,19,70,19,'S'],['Cheddar cheese',100,23,33,3.4,0,'P'],['Red kidney beans (canned)',150,7.8,0.6,17,0,'X']] },
+  { id:'pb_quesadillas', name:'Peanut Butter Quesadillas', band:[600,1200], mr:false, vg:'pb_banana', plant:true,
+    diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:1},
+    ings:[['Whole wheat tortillas (x2)',130,12.7,12.7,47,12.7,'S'],['Peanut butter',60,13,31,10,3,'P'],['Large banana',120,1.5,0.5,28,3.6,'X'],['Granola',20,2,2,13,0,'X']] },
+  { id:'chicken_buttered_rice', name:'Chicken Buttered Rice', band:[600,1200], mr:false, vg:null,
+    diet:{meat:1,pork:0,fish:0,dairy:1,egg:0,gluten:0},
+    ings:[['White rice',200,14.2,1.4,158,2.6,'S'],['Chicken thighs (no skin)',100,20,4.1,0,0,'P'],['Butter',20,0.2,16,0,0,'X']] },
+  { id:'meat_potato_fries', name:'Chicken & Fries', band:[600,1200], mr:false, vg:null,
+    diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:0},
+    ings:[['Chicken thighs (no skin)',200,40,8.2,0,0,'P'],['Frozen potato fries',400,9.6,18,97.2,11.2,'S'],['Pickles',150,0.8,0.4,2.1,1.5,'X'],['Garlic sauce',50,1.7,9.9,3.1,0.9,'X'],['Ketchup',50,0.5,0.1,14,0.1,'X']] },
+
 ];
 
 
@@ -1884,6 +1913,45 @@ const isVegan=(m)=>{const d=m.diet;return !(d.meat||d.pork||d.fish||d.dairy||d.e
 // the scaled ingredient weights separately. Rendered as a numbered list behind a
 // "See recipe" toggle.
 const STEPS = {
+  cheese_pasta_gouda: [
+    "Cook the pasta and drain it, leaving a little water in the bottom of the pot.",
+    "Grate the gouda and cheddar into the hot pasta and stir, so the cheese melts and coats the pasta.",
+  ],
+  parmesan_spaghetti: [
+    "Cook the spaghetti, then drain it but leave a little of the starchy water in the pot.",
+    "Off the heat, add the olive oil, black pepper, and grated parmesan to the pot.",
+    "Toss hard until the cheese melts into the water and oil and turns creamy, coating the pasta. Add a splash more hot water if it needs loosening.",
+  ],
+  spaghetti_bolognaise: [
+    "Cook and drain the spaghetti.",
+    "Warm the bolognaise sauce and spoon it over the top.",
+  ],
+  pb_banana_toast: [
+    "Toast the bread.",
+    "Spread the peanut butter across the slices and top with sliced banana.",
+  ],
+  buttered_rice_eggs: [
+    "Toss the hot rice with the butter so it melts through, and season with soy sauce or whatever condiments you like.",
+    "Fry the eggs and serve them on the side.",
+  ],
+  cheese_quesadillas: [
+    "Spread the beans over the tortillas and top with shredded cheddar, then fold each in half.",
+    "Cook in a hot skillet 3 to 4 minutes per side, until golden and the cheese is melted.",
+  ],
+  pb_quesadillas: [
+    "Spread the peanut butter over each tortilla, add sliced banana, and sprinkle with granola.",
+    "Fold in half and cook on a dry pan a minute or two until lightly browned and the peanut butter softens.",
+  ],
+  chicken_buttered_rice: [
+    "Toss the hot rice with the butter so it melts through, and season with soy sauce or whatever condiments you like.",
+    "Pan-cook the chicken thighs and serve them on the side.",
+  ],
+  meat_potato_fries: [
+    "Cut the chicken thighs into strips and season them. Lay them on a sheet of foil with the edges curled up so the fat doesn't run onto the tray.",
+    "Add the frozen fries to the same tray and bake 20 to 25 minutes.",
+    "Serve with the pickles, garlic sauce, and ketchup.",
+  ],
+
   chicken_sandwiches: [
     "Cut the chicken ham into strips and slice the pickles.",
     "Spread mustard on one slice of bread and mayo on the other.",
@@ -2152,7 +2220,7 @@ const STEPS = {
 
 const STARCH_SLOT_MIN = 550;
 const MR_CAP = 1;
-const TARGET_OPTIONS = 4;
+const TARGET_OPTIONS = 6;
 const NO_RECIPE = new Set(['huel','shake_fruit','bars_fruit','smoothie','yogurt_mixfruit','yogurt_fruit','cottage_veg','tuna_salad']);
 
 const hasStarch = (m)=> m.ings.some(i=>i[6]==='S');
@@ -2169,6 +2237,18 @@ function selectCarousels(realMeals, structure, answers){
   // This rescues slots whose target protein is low relative to calories, where lean
   // meals would otherwise overshoot and be rejected. Cut keeps the symmetric default.
   const solveTune = structure.bulkType ? { ...TUNE, PHI: 5 } : TUNE;
+
+  // DENSITY ORDERING. The library is shared; a meal's place in each carousel is set
+  // by its calorie density, not by a bulk/cut tag. Cutters and cautious bulkers see
+  // low-density (high-volume, filling) meals first and discover denser ones as they
+  // scroll; hardgainers get the reverse. Balanced bulk stays neutral (fit order).
+  // 'densDir' multiplies the density key: +1 = low-first, -1 = high-first, 0 = off.
+  const bt = structure.bulkType;
+  const densDir = !bt ? 1              // cut: low-density first
+    : bt === 'cautious' ? 1            // cautious bulk: low-density first (cut-like)
+    : bt === 'hardgainer' ? -1         // hardgainer: high-density first
+    : 0;                               // balanced bulk: neutral
+
   const usedVg = new Set();
   const usedIds = new Set();
   const carousels = [];
@@ -2180,12 +2260,19 @@ function selectCarousels(realMeals, structure, answers){
       .filter(m => eligible(m,restriction) && (!m.mr || allowMR) && (!hasStarch(m) || starchOK) && !(m.vg && usedVg.has(m.vg)))
       .map(m => ({ m, solved: solveMeal(m, K, P, solveTune) }))
       .filter(o => o.solved.feasible);
-    pool.sort((a,b)=> (usedIds.has(a.m.id)?1:0)-(usedIds.has(b.m.id)?1:0) || fit(a.solved)-fit(b.solved) || (a.m.id<b.m.id?-1:1));
+    // Pool order: unused meals first, then by density in the chosen direction (so
+    // the category-balanced picker below draws from the low- or high-density end),
+    // then fit, then a stable id tiebreak. densDir=0 (balanced bulk) falls straight
+    // through to fit order, matching the pre-density behavior.
+    pool.sort((a,b)=> (usedIds.has(a.m.id)?1:0)-(usedIds.has(b.m.id)?1:0)
+      || densDir*(a.solved.density-b.solved.density)
+      || fit(a.solved)-fit(b.solved)
+      || (a.m.id<b.m.id?-1:1));
 
     const picked=[]; let mrCount=0; const localVg=new Set(); const catCount={};
     const canTake=(o)=> !picked.includes(o) && !(o.m.vg && localVg.has(o.m.vg)) && !(o.m.mr && mrCount>=MR_CAP);
     const take=(o)=>{ picked.push(o); if(o.m.mr)mrCount++; if(o.m.vg)localVg.add(o.m.vg); catCount[category(o.m)]=(catCount[category(o.m)]||0)+1; };
-    // category-balanced greedy: least-used category first, then fresh/fit order (pool index)
+    // category-balanced greedy: least-used category first, then pool order (density/fit)
     const pickOne=()=>{ let best=null,bk=null; for(let i=0;i<pool.length;i++){ const o=pool[i]; if(!canTake(o))continue; const k=[catCount[category(o.m)]||0, i]; if(!best||k[0]<bk[0]||(k[0]===bk[0]&&k[1]<bk[1])){best=o;bk=k;} } return best; };
     let o; while(picked.length<TARGET_OPTIONS && (o=pickOne())) take(o);
 
@@ -2198,14 +2285,13 @@ function selectCarousels(realMeals, structure, answers){
 
     picked.forEach(o=>{ if(o.m.vg) usedVg.add(o.m.vg); usedIds.add(o.m.id); });
 
-    // Display order. The category-balanced picker tends to surface the single
-    // "at least one vegan" option first for a non-vegan user, which reads oddly.
-    // Re-order the chosen options for display by fit so a standard option leads;
-    // if the user isn't vegan and a vegan option is in front, push it to the back.
-    // Selection is unchanged — same meals, different order. (Applies to cut and bulk.)
-    let display = picked;
+    // Display order. Sort the chosen options by density in the plan's direction so
+    // the carousel reads as a gradient (low-to-high for cut/cautious, high-to-low for
+    // hardgainer; balanced keeps fit order). Then, for a non-vegan user, push the one
+    // required vegan option to the back so it never leads. Selection is unchanged.
+    let display = picked.slice().sort((a,b)=>
+      densDir*(a.solved.density-b.solved.density) || fit(a.solved)-fit(b.solved) || (a.m.id<b.m.id?-1:1));
     if (!restriction.includes('vegan')) {
-      display = picked.slice().sort((a,b)=> fit(a.solved)-fit(b.solved) || (a.m.id<b.m.id?-1:1));
       const vi = display.findIndex(x=>isVegan(x.m));
       if (vi > -1) { const [v] = display.splice(vi,1); display.push(v); }
     }
