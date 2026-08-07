@@ -1765,6 +1765,20 @@ const MEALS = [
   { id:'gallo_pinto', name:'Gallo Pinto with Fried Eggs', band:[600,1500], mr:false, vg:null,
     diet:{meat:0,pork:0,fish:0,dairy:0,egg:1,gluten:0},
     ings:[['Large eggs (x5)',250,30,25,0,0,'P'],['Cooked brown rice',150,4.1,1.5,40,2.4,'S'],['Kidney beans (canned)',260,13.5,1,40,11.8,'X'],['Onion',100,1.1,0.1,7.6,1.7,'X'],['Bell pepper',100,1,0.3,3.9,2.1,'X'],['Garlic',10,0.6,0.1,3,0.2,'X'],['Oil',10,0,10,0,0,'X'],['Soy sauce',20,1.6,0.1,0.8,0,'X']] },
+  // ---------------- ADDED: CHICKEN SANDWICHES + NOODLES ----------------
+  { id:'chicken_sandwiches', name:'Chicken Sandwiches', band:[600,1500], mr:false, vg:null,
+    diet:{meat:1,pork:0,fish:0,dairy:0,egg:1,gluten:1},
+    ings:[['Chicken ham',150,33,3.8,2.7,0,'P'],['Bread (6 slices)',180,22,6.3,67,10.8,'S'],['Pickles',100,0.5,0.3,1.4,1,'X'],['Mustard',50,1.9,1.6,0.9,2,'X'],['Mayo',30,0.3,23,0.2,0,'X'],['Iceberg lettuce',100,0.9,0.2,1.8,1.2,'X'],['Cherry tomato',100,0.9,0.2,2.7,1.2,'X']] },
+  { id:'chicken_sandwiches_apple', name:'Chicken Sandwiches & Apple', band:[600,1500], mr:false, vg:null,
+    diet:{meat:1,pork:0,fish:0,dairy:0,egg:1,gluten:1},
+    ings:[['Chicken ham',100,22,2.5,1.8,0,'P'],['Bread (4 slices)',120,14,4.2,44,7.2,'S'],['Pickles',75,0.4,0.2,1,0.7,'X'],['Ketchup',50,0.5,0.1,14,0.1,'X'],['Mayo',20,0.2,15,0.1,0,'X'],['Iceberg lettuce',100,0.9,0.2,1.8,1.2,'X'],['Large apple',220,0.6,0.4,24,5,'X']] },
+  { id:'chicken_sandwiches_cucumber', name:'Chicken Sandwiches & Cucumber Salad', band:[600,1500], mr:false, vg:null,
+    diet:{meat:1,pork:0,fish:0,dairy:0,egg:1,gluten:1},
+    ings:[['Chicken ham',100,22,2.5,1.8,0,'P'],['Bread (4 slices)',120,14,4.2,44,7.2,'S'],['Pickles',75,0.4,0.2,1,0.7,'X'],['Ketchup',50,0.5,0.1,14,0.1,'X'],['Mayo',20,0.2,15,0.1,0,'X'],['Iceberg lettuce',100,0.9,0.2,1.8,1.2,'X'],['Cucumber',200,0.6,0.2,3.2,0.5,'X'],['Onion',100,1.1,0.1,7.6,1.7,'X'],['Balsamic vinegar',50,0.2,0,9,0,'X']] },
+  { id:'chicken_instant_noodles', name:'Chicken Instant Veggie Noodles', band:[600,1500], mr:false, vg:null,
+    diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:1},
+    ings:[['Chicken breast',150,30,4.5,0,0,'P'],['Instant noodle pack',75,5.1,14.3,35,1.9,'S'],['Asian veggie mix (frozen)',300,6,0.9,24.4,8.4,'X'],['Oil',5,0,5,0,0,'X']] },
+
 ];
 
 
@@ -1776,7 +1790,14 @@ const ingP = (ig)=> ig[2];
 
 // PTOL: protein may land within +/-5g of target (Radu's rule). BAND_GRACE: a meal
 // is only offered where the slot target sits inside its written calorie band.
-const TUNE = { D:0.35, gMin:0.6, gMax:1.8, aMin:0.4, aMax:2.2, bMin:0.25, bMax:3.0, PTOL:5, BAND_GRACE:0.03, MAXDRIFT:0.12 };
+// PHI (protein-high allowance): on a BULK, protein may run OVER target by this much
+// beyond PTOL (default 0 = symmetric, so the cut is unchanged). Overshoot is nearly
+// free on a bulk — extra protein displaces carbs at equal kcal, so total calories
+// still land, and more protein while gaining is fine. Undershoot stays capped at PTOL.
+const TUNE = { D:0.35, gMin:0.6, gMax:1.8, aMin:0.4, aMax:2.2, bMin:0.25, bMax:3.0, PTOL:5, PHI:0, BAND_GRACE:0.03, MAXDRIFT:0.12 };
+
+// Directional protein-fit test: achieved protein within [-PTOL, +(PTOL+PHI)] of target.
+function proteinFits(achP, P, T){ const d = Math.round(achP) - P; return d >= -T.PTOL && d <= T.PTOL + T.PHI; }
 
 function groupSums(ings){ let k=0,p=0; ings.forEach(ig=>{k+=ingKcal(ig); p+=ingP(ig);}); return {k,p}; }
 function solve2(a1,b1,c1,a2,b2,c2){ const det=a1*b2-b1*a2; if(Math.abs(det)<1e-6) return null; return [(c1*b2-b1*c2)/det,(a1*c2-c1*a2)/det]; }
@@ -1803,11 +1824,11 @@ function solveMeal(meal, K, P, T=TUNE){
       // protein floats within +/-PTOL, sides damped.
       const g2=clamp(1+T.D*(s-1),T.gMin,T.gMax);
       // (a) written portions already fit (protein +/-PTOL, calories close)? keep them as-is.
-      if(Math.abs(base.p-P)<=T.PTOL && Math.abs(base.k-K)/K<=T.MAXDRIFT){ scaleP=1;scaleS=1;scaleX=1;mode='as-written'; }
+      if(proteinFits(base.p,P,T) && Math.abs(base.k-K)/K<=T.MAXDRIFT){ scaleP=1;scaleS=1;scaleX=1;mode='as-written'; }
       else {
         const u=(K - g2*gx.k)/(gp.k+gs.k);
         const achP=u*(gp.p+gs.p)+g2*gx.p;
-        if(u>=T.aMin && u<=T.aMax && Math.abs(Math.round(achP)-P)<=T.PTOL){ scaleP=u;scaleS=u;scaleX=g2;mode='coupled'; }
+        if(u>=T.aMin && u<=T.aMax && proteinFits(achP,P,T)){ scaleP=u;scaleS=u;scaleX=g2;mode='coupled'; }
         else return {feasible:false};
       }
     }
@@ -1818,11 +1839,11 @@ function solveMeal(meal, K, P, T=TUNE){
     if(scaleP<T.aMin||scaleP>T.aMax||scaleX<T.bMin||scaleX>T.bMax){
       // coupled: protein group scales to hit CALORIES; protein floats +/-PTOL, sides damped.
       const g2=clamp(1+T.D*(s-1),T.gMin,T.gMax);
-      if(Math.abs(base.p-P)<=T.PTOL && Math.abs(base.k-K)/K<=T.MAXDRIFT){ scaleP=1;scaleX=1;mode='as-written'; }
+      if(proteinFits(base.p,P,T) && Math.abs(base.k-K)/K<=T.MAXDRIFT){ scaleP=1;scaleX=1;mode='as-written'; }
       else {
         const u=(K - g2*gx.k)/gp.k;
         const achP=u*gp.p+g2*gx.p;
-        if(u>=T.aMin&&u<=T.aMax&&Math.abs(Math.round(achP)-P)<=T.PTOL){ scaleP=u;scaleX=g2;mode='coupled-lc'; }
+        if(u>=T.aMin&&u<=T.aMax&&proteinFits(achP,P,T)){ scaleP=u;scaleX=g2;mode='coupled-lc'; }
         else return {feasible:false};
       }
     }
@@ -1863,6 +1884,30 @@ const isVegan=(m)=>{const d=m.diet;return !(d.meat||d.pork||d.fish||d.dairy||d.e
 // the scaled ingredient weights separately. Rendered as a numbered list behind a
 // "See recipe" toggle.
 const STEPS = {
+  chicken_sandwiches: [
+    "Cut the chicken ham into strips and slice the pickles.",
+    "Spread mustard on one slice of bread and mayo on the other.",
+    "Layer the chicken, pickles, and lettuce between the slices to build each sandwich.",
+    "Serve the cherry tomatoes on the side.",
+  ],
+  chicken_sandwiches_apple: [
+    "Cut the chicken ham into strips and slice the pickles.",
+    "Spread ketchup on one slice of bread and mayo on the other.",
+    "Layer the chicken, pickles, and lettuce between the slices to build each sandwich.",
+    "Serve the apple on the side.",
+  ],
+  chicken_sandwiches_cucumber: [
+    "Cut the chicken ham into strips and slice the pickles.",
+    "Spread ketchup on one slice of bread and mayo on the other.",
+    "Layer the chicken, pickles, and lettuce between the slices to build each sandwich.",
+    "Slice the cucumber and onion, toss with balsamic vinegar, and serve the salad on the side.",
+  ],
+  chicken_instant_noodles: [
+    "Cut the chicken into cubes or strips and stir-fry in a little oil for a few minutes until golden.",
+    "Add the frozen veggie mix on top and cover with water. Cook 10 to 15 minutes until the veggies are tender.",
+    "Stir in the instant noodle pack. The noodles absorb the water, leaving you with a full meal.",
+  ],
+
   huel: [
     "Shake the powder with cold water (roughly 500 ml for two scoops) and drink.",
   ],
@@ -2120,6 +2165,10 @@ function selectCarousels(realMeals, structure, answers){
   const daytimeControl = answers && answers.daytimeControl;
   const allowMR = daytimeControl==='eatout' || daytimeControl==='none';
   const evenPlan = structure.backloadTier==='light';
+  // On a bulk, let a meal's protein run up to 5g OVER the slot target (see PHI).
+  // This rescues slots whose target protein is low relative to calories, where lean
+  // meals would otherwise overshoot and be rejected. Cut keeps the symmetric default.
+  const solveTune = structure.bulkType ? { ...TUNE, PHI: 5 } : TUNE;
   const usedVg = new Set();
   const usedIds = new Set();
   const carousels = [];
@@ -2129,7 +2178,7 @@ function selectCarousels(realMeals, structure, answers){
     const starchOK = K>=STARCH_SLOT_MIN || evenPlan;
     let pool = MEALS
       .filter(m => eligible(m,restriction) && (!m.mr || allowMR) && (!hasStarch(m) || starchOK) && !(m.vg && usedVg.has(m.vg)))
-      .map(m => ({ m, solved: solveMeal(m, K, P) }))
+      .map(m => ({ m, solved: solveMeal(m, K, P, solveTune) }))
       .filter(o => o.solved.feasible);
     pool.sort((a,b)=> (usedIds.has(a.m.id)?1:0)-(usedIds.has(b.m.id)?1:0) || fit(a.solved)-fit(b.solved) || (a.m.id<b.m.id?-1:1));
 
