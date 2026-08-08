@@ -1966,18 +1966,7 @@ function solveMeal(meal, K, P, T=TUNE){
   // rounding is absorbed by the continuous foods instead of drifting the totals.
   const snapped = new Map(); // ingredient -> {grams, label}
   let fixedK=0, fixedP=0;    // macro contribution of frozen (snapped) + veg ingredients
-  // Snap only where the ingredient's group keeps a continuous member to rebalance against.
-  // If a discrete item is the SOLE protein (e.g. bolognaise sauce) or SOLE lever (e.g. a
-  // tomato-sauce lever), freezing it removes the degree of freedom the solver needs to hit
-  // the targets, so it stays continuous. Group = P for protein items, S+F for lever items.
-  const groupContinuousCount = (ig)=>{
-    const grp = ig[6]==='P' ? Pg : (ig[6]==='S'||ig[6]==='F') ? Lg : null;
-    if(!grp) return 99; // veg: always fine to snap (it's fixed anyway)
-    return grp.filter(x=> x!==ig && !UNIT[x[0]]).length; // continuous (non-unit) members left
-  };
   meal.ings.forEach(ig=>{
-    if(!UNIT[ig[0]]) return;
-    if(groupContinuousCount(ig)===0) return; // sole flex in its group -> don't snap
     const g0=Math.max(5, Math.round(ig[1]*scaleOf(ig[6])/5)*5);
     const snap=snapUnit(ig[0], g0);
     if(snap){ const r=snap.grams/ig[1]; snapped.set(ig, {grams:snap.grams,label:snap.label}); fixedK+=ingKcal(ig)*r; fixedP+=ig[2]*r; }
@@ -2600,6 +2589,7 @@ const IntroScreen = ({ code, units, onContinue, onBack }) => {
 
 const PER_PAGE = 3;
 const CustomMacrosScreen = ({ onBuild, onBack }) => {
+  const [direction, setDirection] = useState('cut');
   const [calories, setCalories] = useState('');
   const [protein, setProtein] = useState('');
   const [fat, setFat] = useState('');
@@ -2613,14 +2603,14 @@ const CustomMacrosScreen = ({ onBuild, onBack }) => {
   const fiber = !isNaN(cal) && cal > 0 ? Math.round((cal / 1000) * 14) : null;
   const overshoot = valid && carbsRaw < 0;
   const lowFat = valid && f < 60;
-  const lowCarb = valid && !overshoot && carbs < 100;
+  const lowCarb = valid && direction === 'cut' && !overshoot && carbs < 100;
   const canBuild = valid && !overshoot;
 
   const inputCls = 'mt-1 w-full px-3 py-3 rounded-lg border border-stone-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500';
 
   const submit = () => {
     if (!canBuild) return;
-    onBuild({ direction: 'cut', target: cal, protein: p, fat: f, carbs: Math.max(0, carbs), fiber });
+    onBuild({ direction, target: cal, protein: p, fat: f, carbs: Math.max(0, carbs), fiber });
   };
 
   return (
@@ -2633,8 +2623,14 @@ const CustomMacrosScreen = ({ onBuild, onBack }) => {
       <div className="mt-5">
         <label className="text-sm font-medium text-stone-700">Goal</label>
         <div className="mt-1 grid grid-cols-2 gap-2">
-          <div className="rounded-lg border-2 border-orange-500 bg-orange-50 text-orange-700 font-semibold py-2.5 text-center text-sm">Cut</div>
-          <div className="rounded-lg border border-stone-200 bg-stone-50 text-stone-400 py-2.5 text-center text-sm">Bulk <span className="text-xs">· coming soon</span></div>
+          <button type="button" onClick={() => setDirection('cut')}
+            className={direction === 'cut'
+              ? 'rounded-lg border-2 border-orange-500 bg-orange-50 text-orange-700 font-semibold py-2.5 text-center text-sm'
+              : 'rounded-lg border border-stone-200 bg-stone-50 text-stone-500 py-2.5 text-center text-sm hover:border-stone-300'}>Cut</button>
+          <button type="button" onClick={() => setDirection('bulk')}
+            className={direction === 'bulk'
+              ? 'rounded-lg border-2 border-orange-500 bg-orange-50 text-orange-700 font-semibold py-2.5 text-center text-sm'
+              : 'rounded-lg border border-stone-200 bg-stone-50 text-stone-500 py-2.5 text-center text-sm hover:border-stone-300'}>Bulk</button>
         </div>
       </div>
 
@@ -2665,7 +2661,9 @@ const CustomMacrosScreen = ({ onBuild, onBack }) => {
 
       <div className="mt-4 bg-stone-50 border border-stone-200 rounded-xl p-4 text-sm text-stone-700 leading-relaxed">
         <div className="font-semibold text-stone-900 mb-1">How to use these numbers</div>
-        Hit your calories and protein. Those two drive your results. Fat and carbs are floors, not exact targets: keep fat around 60g and up, and let carbs fill the rest, staying around 100g and up on a cut.
+        {direction === 'cut'
+          ? 'Hit your calories and protein. Those two drive your results. Fat and carbs are floors, not exact targets: keep fat around 60g and up, and let carbs fill the rest, staying around 100g and up on a cut.'
+          : 'Hit your calories and protein. On a bulk the calories drive the gain, so let carbs fill the rest and keep fat around 60g and up. Getting all your calories in is the priority.'}
       </div>
 
       <PrimaryButton onClick={submit} disabled={!canBuild} className="mt-5">Review my targets <ArrowRight className="w-4 h-4" /></PrimaryButton>
