@@ -1783,7 +1783,7 @@ const MEALS = [
   { id:'cheese_pasta_gouda', name:'Cheese Pasta', band:[750,1750], mr:false, vg:null,
     diet:{meat:0,pork:0,fish:0,dairy:1,egg:0,gluten:1},
     ings:[['White pasta (dry)',200,26,3,149.3,6.4,'S'],['Gouda cheese',50,13,14,1.1,0,'P'],['Cheddar cheese',50,12,17,1.7,0,'P']] },
-  { id:'parmesan_spaghetti', name:'Cacio e Pepe', band:[750,1750], mr:false, vg:null,
+  { id:'parmesan_spaghetti', name:'Cacio e Pepe', band:[750,1750], mr:false, vg:null, min:{'Parmesan':50},
     diet:{meat:0,pork:0,fish:0,dairy:1,egg:0,gluten:1},
     ings:[['White pasta (dry)',200,26,3,149.3,6.4,'S'],['Parmesan',50,18,13,1.7,0,'P'],['Olive oil',20,0,20,0,0,'F'],['Black pepper',3,0.3,0.1,1.6,0.8,'X']] },
   { id:'spaghetti_bolognaise', name:'Spaghetti Bolognaise', band:[700,1600], mr:false, vg:null,
@@ -2047,6 +2047,14 @@ function solveMeal(meal, K, P, T=TUNE){
   // drift guard stretch them. Rejection-only: never changes how a plate is scaled.
   const natProtDens = base.p/base.k*1000, slotProtDens = P/K*1000;
   if(slotProtDens < natProtDens*T.PDLO || slotProtDens > natProtDens*T.PDHI) return {feasible:false};
+
+  // INGREDIENT MINIMUM FLOOR: some meals have a DEFINING ingredient that can't scale below
+  // a sensible amount without becoming a different dish (e.g. Cacio e Pepe below ~40g
+  // parmesan is just buttered noodles). meal.min = {ingredientName: minGrams}. Rejection-
+  // only: if any named ingredient's solved portion is under its floor, drop the plate.
+  if(meal.min){
+    for(const p of portions){ if(meal.min[p.name] && p.grams < meal.min[p.name]) return {feasible:false}; }
+  }
 
   return { feasible:true, mode, portions,
     kcal:Math.round(aK), protein:Math.round(aP), fat:Math.round(aF), carbs:Math.round(aC), fiber:Math.round(aFib),
