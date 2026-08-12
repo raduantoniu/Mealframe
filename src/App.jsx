@@ -1845,7 +1845,7 @@ const MEALS = [
 
 
 // energy: 4/9/4 with fiber at 2 kcal/g
-const kcalMacro = (p,f,c,fib)=> 4*p + 9*f + 4*c - 2*fib;
+const kcalMacro = (p,f,c,fib)=> 4*p + 9*f + 4*c; // plain 4/4/9 (no fiber discount) so meal calories match slot targets and standard food trackers
 const ingKcal = (ig)=> kcalMacro(ig[2],ig[3],ig[4],ig[5]);
 const ingP = (ig)=> ig[2];
 
@@ -2029,9 +2029,13 @@ function solveMeal(meal, K, P, T=TUNE){
     else { const sc = ig[6]==='P'?scaleP : (ig[6]==='S'||ig[6]==='F')?scaleL : scaleX;
       g=Math.max(5, Math.round(ig[1]*sc/5)*5); }
     const r=g/ig[1];
-    aK+=kcalMacro(ig[2]*r,ig[3]*r,ig[4]*r,ig[5]*r); aP+=ig[2]*r; aF+=ig[3]*r; aC+=ig[4]*r; aFib+=ig[5]*r; grams+=g;
+    const ip=ig[2]*r, iff=ig[3]*r, ic=ig[4]*r, ifib=ig[5]*r, ik=kcalMacro(ip,iff,ic,ifib);
+    aK+=ik; aP+=ip; aF+=iff; aC+=ic; aFib+=ifib; grams+=g;
     cookedGrams += g * cookFactor(ig[0]);
-    return label ? {name:ig[0], grams:g, label} : {name:ig[0], grams:g};
+    // Per-ingredient macros for the scaled quantity, so the meal card is auditable
+    // line by line against a food tracker. kcal uses the same formula as the meal total.
+    const macro = { kcal:Math.round(ik), protein:Math.round(ip), carbs:Math.round(ic), fat:Math.round(iff), fiber:Math.round(ifib) };
+    return label ? {name:ig[0], grams:g, label, ...macro} : {name:ig[0], grams:g, ...macro};
   });
   const cookedDensity = aK/cookedGrams;
   // HARD VOLUME FLOOR: a meal must be at least as calorie-dense (cooked) as K/DENS_DIV,
@@ -3388,8 +3392,15 @@ const MealCard = ({ o }) => {
         </div>
       </div>
       <div className="mt-3 pt-3 border-t border-stone-100">
-        <div className="text-xs font-medium text-stone-500 mb-1">Ingredients</div>
-        <div className="text-sm text-stone-700 leading-relaxed">{o.portions.map((p) => p.label ? `${p.label} (${p.grams}g)` : `${p.name} ${p.grams}g`).join(' · ')}</div>
+        <div className="text-xs font-medium text-stone-500 mb-1.5">Ingredients</div>
+        <div className="space-y-1">
+          {o.portions.map((p, pi) => (
+            <div key={pi} className="text-sm text-stone-700 leading-snug">
+              {p.label ? `${p.label} (${p.grams}g)` : `${p.name} ${p.grams}g`}
+              <span className="text-stone-400 text-xs tabular-nums"> · {p.kcal} kcal · {p.protein}P · {p.carbs}C · {p.fat}F</span>
+            </div>
+          ))}
+        </div>
       </div>
       {o.steps && o.steps.length > 0 && (
         <div className="mt-3 pt-3 border-t border-stone-100">
