@@ -2438,6 +2438,13 @@ const STEPS = {
 const STARCH_SLOT_MIN = 550;
 const MR_CAP = 1;
 const TARGET_OPTIONS = 6;
+// TESTING TOGGLE. When true, each slot shows EVERY dietarily-eligible meal that is
+// feasible for that slot, with no curation applied (no MR/starch gating, no variant
+// de-dup across or within slots, no category balancing, no option cap, no vegan
+// reordering), rendered as a vertical list tagged with each meal's id. This is a
+// review surface for deciding which meals belong in which slot. Set to false to
+// restore the normal curated carousels (TARGET_OPTIONS per slot).
+const REVIEW_MODE = true;
 const NO_RECIPE = new Set(['huel','shake_fruit','bars_fruit','smoothie','yogurt_mixfruit','yogurt_fruit','cottage_veg','tuna_salad']);
 
 const hasStarch = (m)=> m.ings.some(i=>i[6]==='S');
@@ -2472,6 +2479,21 @@ function selectCarousels(realMeals, structure, answers){
 
   realMeals.forEach((slot)=>{
     const K=slot.kcal, P=slot.protein;
+    if (REVIEW_MODE) {
+      // Full feasible menu for this slot: every dietarily-eligible meal that solves,
+      // no curation, each slot judged independently. Sorted low->high density, then fit.
+      const all = MEALS
+        .filter(m => eligible(m, restriction))
+        .map(m => ({ m, solved: solveMeal(m, K, P, solveTune) }))
+        .filter(o => o.solved.feasible)
+        .sort((a,b)=> (a.solved.density-b.solved.density) || fit(a.solved)-fit(b.solved) || (a.m.id<b.m.id?-1:1));
+      carousels.push({ K, P, options: all.map(o=>({
+        id:o.m.id, name:o.m.name, img:'/meals/'+o.m.id+'.jpg', vegan:isVegan(o.m), recipe:needsRecipe(o.m),
+        kcal:o.solved.kcal, protein:o.solved.protein, carbs:o.solved.carbs, fat:o.solved.fat, fiber:o.solved.fiber,
+        density:o.solved.density, portions:o.solved.portions, steps:STEPS[o.m.id]||[],
+      })) });
+      return;
+    }
     const starchOK = K>=STARCH_SLOT_MIN || evenPlan;
     let pool = MEALS
       .filter(m => eligible(m,restriction) && (!m.mr || allowMR) && (!hasStarch(m) || starchOK) && !(m.vg && usedVg.has(m.vg)))
@@ -3541,7 +3563,7 @@ const ResultsScreen = ({ code, structure, personalization, plan, templateId, alt
 
       <div className="mt-5">
         <h3 className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Meal-by-meal targets</h3>
-        <p className="text-xs text-stone-500 mb-3 leading-relaxed">Quantities are raw weights unless noted. Scale them to the brands you use — macros vary a little by product. Calorie density is calories per gram; lower means more food for the same calories, so it fills you up more. Swipe each meal for four options.</p>
+        <p className="text-xs text-stone-500 mb-3 leading-relaxed">Quantities are raw weights unless noted. Scale them to the brands you use — macros vary a little by product. Calorie density is calories per gram; lower means more food for the same calories, so it fills you up more. {REVIEW_MODE ? 'Review mode: every feasible meal is listed per slot, tagged with its id.' : 'Swipe each meal for more options.'}</p>
         <div className="space-y-4">
           {(() => {
             const reals = aPlan.meals.filter((mm) => !mm.isShake).map((mm) => ({ kcal: mm.kcal, protein: mm.protein }));
@@ -3574,7 +3596,17 @@ const ResultsScreen = ({ code, structure, personalization, plan, templateId, alt
                     <div className="text-sm font-semibold text-stone-900">{m.kcal} kcal · {m.protein}P</div>
                   </div>
                   {car && car.options.length > 0
-                    ? <MealCarousel options={car.options} />
+                    ? (REVIEW_MODE
+                        ? <div className="space-y-3">
+                            <div className="text-xs text-stone-400">{car.options.length} feasible option{car.options.length === 1 ? '' : 's'} for this slot</div>
+                            {car.options.map((o, oi) => (
+                              <div key={oi}>
+                                <div className="text-xs font-mono text-stone-400 mb-1">#{oi + 1} · {o.id}</div>
+                                <MealCard o={o} />
+                              </div>
+                            ))}
+                          </div>
+                        : <MealCarousel options={car.options} />)
                     : <div className="bg-white border border-stone-200 rounded-xl p-4 text-sm text-stone-500">No library meals fit this slot yet.</div>}
                 </div>
               );
