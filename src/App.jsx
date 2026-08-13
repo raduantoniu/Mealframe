@@ -1674,9 +1674,10 @@ const MEALS = [
     diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:0},
     rules:{ 'Firm tofu':{max:400}, 'Mushrooms':{max:170}, 'Bell pepper':{max:170}, 'Onion':{ratioTo:'Bell pepper',ratio:0.5,max:90}, 'Oil':{max:15} },
     ings:[['Firm tofu',400,36,16.8,8,3.6,'P'],['Mushrooms',150,3,0,4.5,3,'X'],['Onion',150,1.6,0.2,11.5,2.5,'X'],['Bell pepper',150,1.5,0.4,5.8,3.1,'X'],['Oil',10,0,10,0,0,'F']] },
-  { id:'tofu_lentil', name:'Tofu & Lentil Bowl', band:[380,600], mr:false, vg:null,
+  { id:'tofu_lentil', name:'Tofu & Lentil Bowl', band:[380,580], mr:false, vg:null,
     diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:0},
-    rules:{ 'Smoked tofu':{min:150,max:230}, 'Soy sauce':{min:10,max:15}, 'Hot sauce':{min:5,max:10}, 'Tomato':{min:100,max:110}, 'Cucumber':{min:100,max:110} },
+    rules:{ 'Lentils (canned)':{stepBase:true,min:130,max:260}, 'Soy sauce':{min:10,max:15}, 'Hot sauce':{min:5,max:10}, 'Tomato':{min:100,max:110}, 'Cucumber':{min:100,max:110} },
+    min:{ 'Smoked tofu':150 },
     ings:[['Smoked tofu',200,28,16,1.8,2,'P'],['Lentils (canned)',200,10.8,0.8,28,13,'S'],['Tomato',105,0.9,0.2,2.7,1.2,'X'],['Cucumber',105,0.3,0.1,1.6,0.3,'X'],['Soy sauce',20,1.6,0.1,0.8,0,'F'],['Hot sauce',50,1,0.4,9,0,'F']] },
   { id:'tofu_hummus', name:'Tofu & Hummus Bowl', band:[430,565], mr:false, vg:null,
     diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:0},
@@ -1709,13 +1710,15 @@ const MEALS = [
     diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:0},
     rules:{ 'Chicken breast':{min:150}, 'White rice (dry)':{min:45}, 'Frozen veg mix':{ratioTo:'White rice (dry)',ratio:3.3,min:120,max:240}, 'Oil':{max:6}, 'Soy sauce':{min:10,max:15} },
     ings:[['Chicken breast',225,45,6.8,0,0,'P'],['White rice (dry)',80,5.7,0.6,63,1,'S'],['Frozen veg mix',250,7.8,1.2,32,10.7,'X'],['Oil',10,0,10,0,0,'F'],['Soy sauce',20,1.6,0.1,0.8,0,'F']] },
-  { id:'omelette', name:'Rustic Veggie Omelette', band:[450,630], mr:false, vg:null,
+  { id:'omelette', name:'Rustic Veggie Omelette', band:[385,665], mr:false, vg:null,
     diet:{meat:0,pork:0,fish:0,dairy:1,egg:1,gluten:0},
-    rules:{ 'Eggs':{fix:150}, 'Cottage cheese':{min:90,max:260}, 'Mushrooms':{fix:120}, 'Bell pepper':{fix:120}, 'Onion':{fix:60}, 'Oil':{fix:10} },
+    rules:{ 'Eggs':{stepBase:true,min:100,max:200}, 'Mushrooms':{fix:120}, 'Bell pepper':{fix:120}, 'Onion':{fix:60}, 'Oil':{fix:10} },
+    min:{ 'Cottage cheese':90 },
     ings:[['Eggs',150,18,15,0,0,'P'],['Cottage cheese',250,28,10.8,8.5,0,'P'],['Mushrooms',150,3,0,4.5,3,'X'],['Onion',150,1.6,0.2,11.5,2.5,'X'],['Bell pepper',150,1.5,0.4,5.8,3.1,'X'],['Oil',10,0,10,0,0,'F']] },
-  { id:'omelette_toast', name:'Rustic Veggie Omelette & Toast', band:[680,760], mr:false, vg:null,
+  { id:'omelette_toast', name:'Rustic Veggie Omelette & Toast', band:[560,780], mr:false, vg:null,
     diet:{meat:0,pork:0,fish:0,dairy:1,egg:1,gluten:1},
-    rules:{ 'Eggs':{fix:150}, 'Cottage cheese':{min:90,max:260}, 'Bread':{min:30,max:60}, 'Mushrooms':{fix:120}, 'Bell pepper':{fix:120}, 'Onion':{fix:60}, 'Oil':{fix:10} },
+    rules:{ 'Eggs':{fix:150}, 'Bread':{stepBase:true,min:30,max:60}, 'Mushrooms':{fix:120}, 'Bell pepper':{fix:120}, 'Onion':{fix:60}, 'Oil':{fix:10} },
+    min:{ 'Cottage cheese':90 },
     ings:[['Eggs',150,18,15,0,0,'P'],['Cottage cheese',250,28,10.8,8.5,0,'P'],['Bread',60,7,2.1,45.9*0.6,3.6,'S'],['Mushrooms',150,3,0,4.5,3,'X'],['Onion',150,1.6,0.2,11.5,2.5,'X'],['Bell pepper',150,1.5,0.4,5.8,3.1,'X'],['Oil',10,0,10,0,0,'F']] },
   { id:'chicken_potato', name:'Chicken & Baked Potatoes', band:[700,1550], mr:false, vg:'bakedpotato',
     diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:0},
@@ -1726,11 +1729,13 @@ const MEALS = [
   { id:'chickpea_pasta', name:'Chickpea or Lentil Pasta', band:[550,1250], mr:false, vg:null,
     diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:0},
     ings:[['Chickpea/lentil pasta (dry)',200,54,3.6,116,25,'P'],['Tomato-based sauce',250,4,4,19.5,3.9,'F']] },
-  { id:'beans_sausage', name:'Baked Beans & Sausages', band:[550,1250], mr:false, vg:'bakedbeans',
+  { id:'beans_sausage', name:'Baked Beans & Sausages', band:[550,1200], mr:false, vg:'bakedbeans',
     diet:{meat:1,pork:1,fish:0,dairy:0,egg:0,gluten:0},
+    rules:{ 'Baked beans (can)':{stepBase:true,min:260,max:520,prefer:'less'}, 'Pickles':{max:180} },
     ings:[['Sausage',200,30,34,5.2,0,'P'],['Baked beans (can)',400,18.6,0.8,64,14,'S'],['Pickles',150,0.8,0.4,2.1,1.5,'X']] },
   { id:'beans_pbsausage', name:'Baked Beans & Plant Sausages', band:[500,1150], mr:false, vg:'bakedbeans', plant:true,
     diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:0},
+    rules:{ 'Baked beans (can)':{stepBase:true,min:260,max:520,prefer:'less'}, 'Pickles':{max:180} },
     ings:[['Plant-based sausage',200,12,22,38,0,'P'],['Baked beans (can)',400,18.6,0.8,64,14,'S'],['Pickles',150,0.8,0.4,2.1,1.5,'X']] },
   { id:'chicken_proteinbowl', name:'Chicken Protein Bowl', band:[470,820], mr:false, vg:null,
     diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:0},
@@ -1742,8 +1747,9 @@ const MEALS = [
   { id:'tofu_noodles', name:'Tofu Noodles', band:[600,1400], mr:false, vg:'noodles', plant:true,
     diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:1},
     ings:[['Smoked tofu',200,28,16,1.8,2,'P'],['Wheat noodles (dry)',100,13,1.5,74.7,3.2,'S'],['Asian veg mix',200,4,0.6,16.3,5.6,'X'],['Sweet chilli sauce',90,0.7,0.7,35.3,0,'F'],['Oil',5,0,5,0,0,'F']] },
-  { id:'burgers_meat', name:'Burgers & Carrot Sticks', band:[800,850], mr:false, vg:'burgers',
+  { id:'burgers_meat', name:'Burgers & Carrot Sticks', band:[450,920], mr:false, vg:'burgers',
     diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:1},
+    rules:{ 'Burger patties':{stepBase:true,min:100,max:300}, 'Burger buns':{ratioTo:'Burger patties',ratio:0.6}, 'Carrots':{max:250}, 'Onion slices':{fix:40}, 'Pickles':{fix:40}, 'Mustard':{fix:15}, 'Ketchup':{max:25} },
     ings:[['Burger patties',200,34,30,4.2,0,'P'],['Burger buns',120,11.8,4.7,58,2.1,'S'],['Carrots',200,1.8,0.4,13.6,5.6,'X'],['Onion slices',50,0.6,0.1,3.8,0.9,'X'],['Pickles',50,0.2,0.2,0.7,0.5,'X'],['Mustard',50,1.9,1.6,0.9,2,'F'],['Ketchup',50,0.5,0.1,14,0.1,'F']] },
   { id:'burgers_plant', name:'Plant Burgers & Carrot Sticks', band:[750,850], mr:false, vg:'burgers', plant:true,
     diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:1},
@@ -1841,9 +1847,11 @@ const MEALS = [
   // ---------------- ADDED: BURGER & FRIES (fries carry calories, bun stays 1) ----------------
   { id:'burgers_fries_meat', name:'Burgers & Fries', band:[650,1100], mr:false, vg:null,
     diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:1},
+    rules:{ 'Burger patties':{stepBase:true,min:100,max:300}, 'Burger buns':{ratioTo:'Burger patties',ratio:0.6}, 'Onion slices':{fix:40}, 'Pickles':{fix:40}, 'Mustard':{fix:15}, 'Ketchup':{max:25} },
     ings:[['Burger patties',200,34,30,4.2,0,'P'],['Frozen potato fries (raw)',200,4.8,9,48.6,5.6,'S'],['Burger buns',120,11.8,4.7,58,2.1,'S'],['Onion slices',50,0.6,0.1,3.8,0.9,'X'],['Pickles',50,0.2,0.2,0.7,0.5,'X'],['Mustard',50,1.9,1.6,0.9,2,'F'],['Ketchup',50,0.5,0.1,14,0.1,'F']] },
-  { id:'burgers_fries_plant', name:'Plant Burgers & Fries', band:[650,1100], mr:false, vg:null, plant:true,
+  { id:'burgers_fries_plant', name:'Plant Burgers & Fries', band:[780,1120], mr:false, vg:null, plant:true,
     diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:1},
+    rules:{ 'Burger buns':{stepBase:true,min:60,max:180}, 'Plant-based burger':{ratioTo:'Burger buns',ratio:1.67}, 'Onion slices':{fix:40}, 'Pickles':{fix:40}, 'Mustard':{fix:15}, 'Ketchup':{max:25} },
     ings:[['Plant-based burger',200,34,26,8.8,1.8,'P'],['Frozen potato fries (raw)',200,4.8,9,48.6,5.6,'S'],['Burger buns',120,11.8,4.7,58,2.1,'S'],['Onion slices',50,0.6,0.1,3.8,0.9,'X'],['Pickles',50,0.2,0.2,0.7,0.5,'X'],['Mustard',50,1.9,1.6,0.9,2,'F'],['Ketchup',50,0.5,0.1,14,0.1,'F']] },
 
   // ---------------- ADDED: VEGAN MID-BAND MEALS ----------------
@@ -1988,6 +1996,35 @@ function solveMeal(meal, K, P, T=TUNE, _bg){
     }
     return hasList ? (best||res) : res;
   }
+  // STEP BASE: a discrete ingredient (eggs, toast, patties) that grows in WHOLE UNITS while a
+  // continuous ingredient (cottage cheese, etc.) fills in behind it. A single shared scale
+  // can't do this — it moves the discrete base and the continuous filler together — so meals
+  // like the omelette came out either cheese-forward or narrow. Here we try every whole-unit
+  // count the base allows, fix that count, let the continuous foods re-solve for that tier,
+  // and keep the feasible plate closest to the slot's calories, breaking near-ties toward MORE
+  // of the base (egg-forward: prefer adding an egg over adding cheese until the cap). This is
+  // the eggs 2->3->4-with-cheese-dialing-inside-each-tier behaviour a shared scale can't give.
+  // Rule: {stepBase:true, min:g, max:g} on the discrete ingredient (min/max grams -> unit counts).
+  // Reuses the fix path per tier; a meal without a stepBase rule never enters this branch.
+  const _SB = _R && meal.ings.find(ig=>_R[ig[0]] && _R[ig[0]].stepBase);
+  if(_bg===undefined && _SB && UNIT[_SB[0]]){
+    const r=_R[_SB[0]], U=UNIT[_SB[0]], stp=U.step;
+    const lo=Math.max(stp, Math.round((r.min!=null?r.min:U.unit)/(U.unit*stp))*stp);
+    const hi=Math.max(lo, Math.round((r.max!=null?r.max:U.unit)/(U.unit*stp))*stp);
+    let best=null, bestN=0;
+    for(let n=lo; n<=hi+1e-9; n+=stp){
+      const trial={...meal, rules:{...meal.rules, [_SB[0]]:{fix:Math.round(n*U.unit)}}};
+      const res=solveMeal(trial,K,P,T);          // trial has no stepBase rule -> won't re-enter this branch
+      if(!res || !res.feasible) continue;
+      const dNew=Math.abs(res.kcal-K);
+      if(!best){ best=res; bestN=n; continue; }
+      const dBest=Math.abs(best.kcal-K);
+      if(dNew < dBest - K*0.04){ best=res; bestN=n; }                    // clearly closer to target -> take it
+      else if(dNew <= dBest + K*0.04 && (r.prefer==='less' ? n<bestN : n>bestN)){ best=res; bestN=n; }   // near-tie -> prefer more of the base (or fewer, if prefer:'less')
+    }
+    return best || {feasible:false};
+  }
+
   // band gate: don't scale a meal outside the range it was written for
   if(meal.band && (K < meal.band[0]*(1-T.BAND_GRACE) || K > meal.band[1]*(1+T.BAND_GRACE))) return {feasible:false};
 
