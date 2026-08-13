@@ -1619,8 +1619,9 @@ const MEALS = [
     ings:[['Quest bars (x2)',120,40,18,24,22,'P'],['Large apple',420,1.1,0.7,48,10,'S']] },
 
   // ---------------- DAYTIME / LEAN (300-700) ----------------
-  { id:'chicken_fajitas', name:'Chicken Fajitas', band:[350,750], mr:false, vg:null,
+  { id:'chicken_fajitas', name:'Chicken Fajitas', band:[380,520], mr:false, vg:null,
     diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:0},
+    rules:{ 'Onion':{ratioTo:'Bell pepper', ratio:0.4, min:40, max:110}, 'Oil':{max:16}, 'Hot salsa':{min:80, max:150} },
     ings:[['Chicken breast',225,45,6.8,0,0,'P'],['Onion',250,2.8,0.2,19,4.2,'X'],['Bell pepper',250,2.5,0.8,9.8,5.2,'X'],['Oil',10,0,10,0,0,'F'],['Hot salsa',100,1.5,0.2,4.7,1.9,'F']] },
   { id:'chicken_peas', name:'Chicken & Peas Skillet', band:[250,650], mr:false, vg:null,
     diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:0},
@@ -1628,14 +1629,17 @@ const MEALS = [
   { id:'chicken_greenbeans', name:'Chicken & Green Beans Skillet', band:[250,550], mr:false, vg:null,
     diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:0},
     ings:[['Chicken thighs',200,40,8.2,0,0,'P'],['Frozen green beans',200,3.6,0.4,8.6,5.4,'X'],['Carrots',200,1.8,0.4,13.6,5.6,'X']] },
-  { id:'burrito_sm', name:'Burrito Bowl', band:[400,900], mr:false, vg:null,
+  { id:'burrito_sm', name:'Spicy Burrito Bowl', band:[490,640], mr:false, vg:null,
     diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:0},
+    rules:{ 'Lean ground meat':{min:130}, 'Kidney beans':{min:130,max:130}, 'Onion':{max:110}, 'Bell pepper':{max:110}, 'Oil':{max:10}, 'Hot salsa':{min:60,max:110} },
     ings:[['Lean ground meat',200,42,14.2,0,0,'P'],['Kidney beans',120,9.6,1.3,19,6.6,'S'],['Onion',100,1.1,0.1,7.6,1.7,'X'],['Bell pepper',100,1,0.3,3.9,2.1,'X'],['Oil',10,0,10,0,0,'F'],['Hot salsa',100,1.5,0.2,4.7,1.9,'F']] },
   { id:'tuna_salad', name:'Tuna Salad', band:[300,650], mr:false, vg:null,
     diet:{meat:0,pork:0,fish:1,dairy:1,egg:1,gluten:0},
-    ings:[['Tuna (drained)',130,25,1.3,0,0,'P'],['Greek yogurt',150,13.5,7.5,6,0,'P'],['Iceberg lettuce',125,1.1,0.2,2.2,1.5,'X'],['Red onion',100,1.1,0.1,7.6,1.7,'X'],['Green olives',25,0.2,4,0.1,0.8,'F'],['Cherry tomato',100,0.9,0.2,2.7,1.2,'X'],['Mustard',20,0.7,0.7,0.4,0.8,'F'],['Mayo',15,0.15,11.5,0.1,0,'F']] },
-  { id:'tuna_stirfry', name:'Tuna Skillet Stir-Fry', band:[350,800], mr:false, vg:null,
+    rules:{ 'Greek yogurt':{ratioTo:'Tuna (drained)', ratio:0.385, min:40, max:100}, 'Red onion':{min:20,max:30}, 'Mustard':{fix:20}, 'Mayo':{fix:15} },
+    ings:[['Tuna (drained)',130,25,1.3,0,0,'P'],['Greek yogurt',150,13.5,7.5,6,0,'P'],['Iceberg lettuce',125,1.1,0.2,2.2,1.5,'X'],['Red onion',100,1.1,0.1,7.6,1.7,'X'],['Green olives',25,0.2,4,0.1,0.8,'F'],['Cherry tomato',100,0.9,0.2,2.7,1.2,'X'],['Mustard',20,0.7,0.7,0.4,0.8,'F'],['Mayo',15,0.15,11.5,0.1,0,'F'],['Olive oil',10,0,10,0,0,'F']] },
+  { id:'tuna_stirfry', name:'Tuna Skillet Stir-Fry', band:[440,660], mr:false, vg:null,
     diet:{meat:0,pork:0,fish:1,dairy:0,egg:1,gluten:0},
+    rules:{ 'Frozen veg mix':{min:180,max:230}, 'Oil':{max:10} },
     ings:[['Tuna (drained)',130,25,1.3,0,0,'P'],['Eggs',100,12,10,0,0,'P'],['Frozen veg mix',250,7.8,1.2,32,10.7,'X'],['Oil',10,0,10,0,0,'F']] },
   { id:'yogurt_mixfruit', name:'Greek Yogurt & Mixed Fruit', band:[350,800], mr:false, vg:null,
     diet:{meat:0,pork:0,fish:0,dairy:1,egg:0,gluten:0},
@@ -1649,42 +1653,49 @@ const MEALS = [
   { id:'smoothie', name:'Protein Smoothie', band:[350,800], mr:false, vg:null,
     diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:0},
     ings:[['Protein powder',60,47,1,1.9,0,'P'],['Large banana',270,3,0.9,55,7,'S'],['Ground flaxseed',15,3,6,4,4,'F']] },
-  { id:'protein_oats', name:'Protein Oats', band:[400,850], mr:false, vg:null,
+  { id:'protein_oats', name:'Protein Oats', band:[415,595], mr:false, vg:null,
     diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:0},
-    ings:[['Protein powder',40,31,0.6,1.3,0,'P'],['Oats',60,8,3.9,35,6,'S'],['Large apple',210,0.6,0.4,24,5,'S'],['Large banana',135,1.5,0.5,28,3.6,'S']] },
-  { id:'protein_platter', name:'Protein Platter', band:[350,750], mr:false, vg:null,
+    rules:{ 'Protein powder':{min:30,max:30}, 'Apple':{min:110,max:220}, 'Large banana':{min:120,max:120} },
+    ings:[['Protein powder',40,31,0.6,1.3,0,'P'],['Oats',60,8,3.9,35,6,'S'],['Apple',210,0.6,0.4,24,5,'S'],['Large banana',135,1.5,0.5,28,3.6,'S']] },
+  { id:'protein_platter', name:'Protein Platter', band:[530,650], mr:false, vg:null,
     diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:1},
-    ings:[['Firm tofu',100,9,4.2,2,0.9,'P'],['Seitan',50,13,1.8,2.7,0.9,'P'],['Tempeh',100,20,11,0.5,7,'P'],['Oil',10,0,10,0,0,'F'],['Tomato',150,1.4,0.3,4.1,1.8,'X'],['Carrot',100,0.9,0.2,6.8,2.8,'X'],['Spinach',50,1.5,0.2,0.7,1.1,'X']] },
+    rules:{ 'Firm tofu':{min:100,max:120}, 'Tempeh':{min:55,max:70}, 'Oil':{fix:10} },
+    ings:[['Firm tofu',100,9,4.2,2,0.9,'P'],['Seitan',50,13,1.8,2.7,0.9,'P'],['Tempeh',100,20,11,0.5,7,'P'],['Oil',10,0,10,0,0,'F'],['Dressing oil',10,0,10,0,0,'F'],['Tomato',150,1.4,0.3,4.1,1.8,'X'],['Carrot',100,0.9,0.2,6.8,2.8,'X'],['Spinach',50,1.5,0.2,0.7,1.1,'X']] },
   { id:'tofu_scramble', name:'Tofu Scramble', band:[350,800], mr:false, vg:null,
     diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:0},
     ings:[['Firm tofu',400,36,16.8,8,3.6,'P'],['Mushrooms',150,3,0,4.5,3,'X'],['Onion',150,1.6,0.2,11.5,2.5,'X'],['Bell pepper',150,1.5,0.4,5.8,3.1,'X'],['Oil',10,0,10,0,0,'F']] },
-  { id:'tofu_lentil', name:'Tofu & Lentil Bowl', band:[350,750], mr:false, vg:null,
+  { id:'tofu_lentil', name:'Tofu & Lentil Bowl', band:[380,600], mr:false, vg:null,
     diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:0},
-    ings:[['Smoked tofu',200,28,16,1.8,2,'P'],['Lentils (canned)',200,10.8,0.8,28,13,'S'],['Tomato',100,0.9,0.2,2.7,1.2,'X'],['Cucumber',100,0.3,0.1,1.6,0.3,'X'],['Soy sauce',20,1.6,0.1,0.8,0,'F'],['Hot sauce',50,1,0.4,9,0,'F']] },
+    rules:{ 'Smoked tofu':{min:150,max:230}, 'Soy sauce':{min:10,max:15}, 'Hot sauce':{min:5,max:10}, 'Tomato':{min:100,max:110}, 'Cucumber':{min:100,max:110} },
+    ings:[['Smoked tofu',200,28,16,1.8,2,'P'],['Lentils (canned)',200,10.8,0.8,28,13,'S'],['Tomato',105,0.9,0.2,2.7,1.2,'X'],['Cucumber',105,0.3,0.1,1.6,0.3,'X'],['Soy sauce',20,1.6,0.1,0.8,0,'F'],['Hot sauce',50,1,0.4,9,0,'F']] },
   { id:'tofu_hummus', name:'Tofu & Hummus Bowl', band:[350,850], mr:false, vg:null,
     diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:0},
     ings:[['Smoked tofu',200,28,16,1.8,2,'P'],['Hummus',100,7.8,18,9.5,5.5,'F'],['Tomato',100,0.9,0.2,2.7,1.2,'X'],['Cucumber',100,0.3,0.1,1.6,0.3,'X'],['Carrot',100,0.9,0.2,6.8,2.8,'X']] },
-  { id:'pork_mushroom', name:'Pork Tenderloin & Mushroom Skillet', band:[300,650], mr:false, vg:'mushroomskillet',
+  { id:'pork_mushroom', name:'Pork Tenderloin & Mushroom Skillet', band:[400,460], mr:false, vg:'mushroomskillet',
     diet:{meat:1,pork:1,fish:0,dairy:0,egg:0,gluten:0},
+    rules:{ 'Oil':{max:12} },
     ings:[['Pork tenderloin',200,40,6.2,0,0,'P'],['Mushrooms',200,4,0,6,4,'X'],['Oil',10,0,10,0,0,'F'],['Spinach',100,2.9,0.4,1.4,2.2,'X'],['Tomato',100,0.9,0.2,2.7,1.2,'X'],['Carrot',100,0.9,0.2,6.8,2.8,'X']] },
   { id:'tofu_mushroom', name:'Savory Tofu & Mushroom Skillet', band:[400,900], mr:false, vg:'mushroomskillet', plant:true,
     diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:0},
     ings:[['Smoked tofu',200,28,16,1.8,2,'P'],['Peanuts',25,6,11,1.7,1.9,'F'],['Mushrooms',200,4,0,6,4,'X'],['Oil',10,0,10,0,0,'F'],['Spinach',100,2.9,0.4,1.4,2.2,'X'],['Tomato',100,0.9,0.2,2.7,1.2,'X'],['Carrot',100,0.9,0.2,6.8,2.8,'X']] },
 
   // ---------------- LEAN CHICKEN / EGG DAYTIME (with a starch lever so they scale up) ----------------
-  { id:'chicken_fajita_wrap', name:'Chicken Fajita Wrap', band:[500,1150], mr:false, vg:null,
+  { id:'chicken_fajita_wrap', name:'Chicken Fajita Wrap', band:[400,820], mr:false, vg:null,
     diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:1},
+    rules:{ 'Chicken breast':{min:110,max:300}, 'Small tortillas':{ratioTo:['Chicken breast','Bell pepper','Onion','Hot salsa'],ratio:0.165,min:40,max:160}, 'Onion':{ratioTo:'Bell pepper',ratio:0.4,min:36,max:80}, 'Bell pepper':{min:90,max:200}, 'Oil':{max:8}, 'Hot salsa':{min:40,max:100} },
     ings:[['Chicken breast',225,45,6.8,0,0,'P'],['Small tortillas',80,7.8,7.8,36.7,7.8,'S'],['Onion',250,2.8,0.2,19,4.2,'X'],['Bell pepper',250,2.5,0.8,9.8,5.2,'X'],['Oil',10,0,10,0,0,'F'],['Hot salsa',100,1.5,0.2,4.7,1.9,'F']] },
   { id:'chicken_rice_greenbeans', name:'Chicken, Rice & Green Beans Skillet', band:[350,800], mr:false, vg:null,
     diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:0},
+    rules:{ 'Carrots':{min:60,max:75}, 'Frozen green beans':{min:100,max:130} },
     ings:[['Chicken thighs',200,40,8.2,0,0,'P'],['Brown rice (dry)',50,3.8,1.6,37,1.8,'S'],['Frozen green beans',200,3.6,0.4,8.6,5.4,'X'],['Carrots',200,1.8,0.4,13.6,5.6,'X']] },
   { id:'egg_platter', name:'Egg & Veggie Protein Platter', band:[500,1200], mr:false, vg:null,
     diet:{meat:0,pork:0,fish:0,dairy:0,egg:1,gluten:0},
     ings:[['Eggs',150,18,15,0,0,'P'],['Firm tofu',200,18,8.4,4,1.8,'P'],['Hummus',100,7.8,18,9.5,5.5,'F'],['Oil',10,0,10,0,0,'F'],['Cherry tomato',150,1.4,0.3,4.1,1.8,'X'],['Cucumber',150,0.4,0.2,2.4,0.4,'X'],['Carrot',100,0.9,0.2,6.8,2.8,'X']] },
 
   // ---------------- DINNER / HIGHER CAL (600-1500) ----------------
-  { id:'chicken_rice', name:'Chicken & Veggie Rice', band:[550,1250], mr:false, vg:null,
+  { id:'chicken_rice', name:'Chicken & Veggie Rice', band:[470,820], mr:false, vg:null,
     diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:0},
+    rules:{ 'Chicken breast':{min:150}, 'White rice (dry)':{min:45}, 'Frozen veg mix':{ratioTo:'White rice (dry)',ratio:3.3,min:120,max:240}, 'Oil':{max:6}, 'Soy sauce':{min:10,max:15} },
     ings:[['Chicken breast',225,45,6.8,0,0,'P'],['White rice (dry)',80,5.7,0.6,63,1,'S'],['Frozen veg mix',250,7.8,1.2,32,10.7,'X'],['Oil',10,0,10,0,0,'F'],['Soy sauce',20,1.6,0.1,0.8,0,'F']] },
   { id:'omelette', name:'Rustic Veggie Omelette', band:[450,1000], mr:false, vg:null,
     diet:{meat:0,pork:0,fish:0,dairy:1,egg:1,gluten:0},
@@ -1707,8 +1718,9 @@ const MEALS = [
   { id:'beans_pbsausage', name:'Baked Beans & Plant Sausages', band:[500,1150], mr:false, vg:'bakedbeans', plant:true,
     diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:0},
     ings:[['Plant-based sausage',200,12,22,38,0,'P'],['Baked beans (can)',400,18.6,0.8,64,14,'S'],['Pickles',150,0.8,0.4,2.1,1.5,'X']] },
-  { id:'chicken_proteinbowl', name:'Chicken Protein Bowl', band:[550,1250], mr:false, vg:null,
+  { id:'chicken_proteinbowl', name:'Chicken Protein Bowl', band:[470,820], mr:false, vg:null,
     diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:0},
+    rules:{ 'Chicken breast':{min:130}, 'Falafel':{min:60,max:150}, 'Hummus':{min:40,max:100}, 'Red onion':{max:40}, 'Oil':{max:6} },
     ings:[['Chicken breast',150,30,4.5,0,0,'P'],['Falafel',150,12.3,13.4,33,11.4,'S'],['Hummus',100,7.8,18,9.5,5.5,'F'],['Tomato',150,1.3,0.3,4,1.8,'X'],['Carrots',100,0.9,0.2,6.8,2.8,'X'],['Red onion',50,0.6,0.1,3.8,0.9,'X'],['Oil',5,0,5,0,0,'F']] },
   { id:'chicken_noodles', name:'Chicken Noodles', band:[550,1250], mr:false, vg:'noodles',
     diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:1},
@@ -1728,9 +1740,10 @@ const MEALS = [
   { id:'wraps_plant', name:'Wraps', band:[550,1250], mr:false, vg:'wraps', plant:true,
     diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:1},
     ings:[['Plant-based mince',100,14,8.6,9.4,0,'P'],['Lentils (canned)',200,10.8,0.8,28,13,'S'],['Small tortillas',130,12.7,12.7,59.7,12.7,'S'],['Onion',100,1.1,0.1,7.6,1.7,'X'],['Bell pepper',100,1,0.3,3.9,2.1,'X'],['Romaine',100,1.2,0.3,1.2,2.1,'X'],['Hot salsa',150,2.2,0.3,7.1,2.8,'F']] },
-  { id:'burrito_lg', name:'Burrito Bowl', band:[450,1050], mr:false, vg:'burritolg',
+  { id:'burrito_lg', name:'Loaded Burrito Bowl', band:[420,600], mr:false, vg:'burritolg',
     diet:{meat:1,pork:0,fish:0,dairy:1,egg:0,gluten:0},
-    ings:[['Ground meat',150,32,10.6,0,0,'P'],['Kidney beans',150,7.8,0.6,22,6.5,'S'],['Sweet corn',150,3.5,1.8,26,3,'S'],['Greek yogurt',150,13.5,7.5,6,0,'P'],['Romaine',100,1.2,0.3,1.2,2.1,'X'],['Onion',100,1.1,0.1,7.6,1.7,'X'],['Tomato',150,1.3,0.3,4,1.8,'X']] },
+    rules:{ 'Sweet corn':{min:40,max:50}, 'Greek yogurt':{min:40,max:45}, 'Onion':{min:20,max:30}, 'Cheddar cheese':{max:20} },
+    ings:[['Ground meat',150,32,10.6,0,0,'P'],['Kidney beans',150,7.8,0.6,22,6.5,'S'],['Sweet corn',150,3.5,1.8,26,3,'S'],['Greek yogurt',150,13.5,7.5,6,0,'P'],['Cheddar cheese',15,3.75,5,0.2,0,'F'],['Romaine',100,1.2,0.3,1.2,2.1,'X'],['Onion',100,1.1,0.1,7.6,1.7,'X'],['Tomato',150,1.3,0.3,4,1.8,'X']] },
   { id:'burrito_vegan', name:'Vegan Burrito Bowl', band:[400,900], mr:false, vg:'burritolg', plant:true,
     diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:0},
     ings:[['Plant-based mince',100,14,8.6,9.4,0,'P'],['Kidney beans',150,7.8,0.6,22,6.5,'S'],['Sweet corn',150,3.5,1.8,26,3,'S'],['Soy yogurt',150,5.4,2.7,14.6,1.5,'P'],['Romaine',100,1.2,0.3,1.2,2.1,'X'],['Onion',100,1.1,0.1,7.6,1.7,'X'],['Tomato',150,1.3,0.3,4,1.8,'X']] },
@@ -1775,8 +1788,9 @@ const MEALS = [
   { id:'chicken_sandwiches_cucumber', name:'Chicken Sandwiches & Cucumber Salad', band:[450,1050], mr:false, vg:null,
     diet:{meat:1,pork:0,fish:0,dairy:0,egg:1,gluten:1},
     ings:[['Chicken ham',100,22,2.5,1.8,0,'P'],['Bread',120,14,4.2,44,7.2,'S'],['Pickles',75,0.4,0.2,1,0.7,'X'],['Ketchup',50,0.5,0.1,14,0.1,'F'],['Mayo',20,0.2,15,0.1,0,'F'],['Iceberg lettuce',100,0.9,0.2,1.8,1.2,'X'],['Cucumber',200,0.6,0.2,3.2,0.5,'X'],['Onion',100,1.1,0.1,7.6,1.7,'X'],['Balsamic vinegar',50,0.2,0,9,0,'F']] },
-  { id:'chicken_instant_noodles', name:'Chicken Instant Veggie Noodles', band:[400,950], mr:false, vg:null,
+  { id:'chicken_instant_noodles', name:'Chicken Instant Veggie Noodles', band:[630,700], mr:false, vg:null,
     diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:1},
+    rules:{ 'Asian veggie mix (frozen)':{ratioTo:'Instant noodle pack', ratio:2.8, min:120, max:230} },
     ings:[['Chicken breast',150,30,4.5,0,0,'P'],['Instant noodle pack',75,5.1,14.3,35,1.9,'S'],['Asian veggie mix (frozen)',300,6,0.9,24.4,8.4,'X'],['Oil',5,0,5,0,0,'F']] },
 
   // ---------------- ADDED: BULK BATCH 1 (shared library, untagged) ----------------
@@ -1885,6 +1899,7 @@ const UNIT = {
   'Burger patties':  {unit:100, step:1,   noun:'patty',         nounPl:'patties'},
   'Instant noodle pack':{unit:75,step:1,  noun:'pack',          nounPl:'packs'},
   'Large apple':     {unit:220, step:1,   noun:'apple',         nounPl:'apples'},
+  'Apple':           {unit:220, step:0.5, noun:'apple',         nounPl:'apples'},
   'Large banana':    {unit:120, step:1,   noun:'banana',        nounPl:'bananas'},
   'Medium banana':   {unit:100, step:1,   noun:'banana',        nounPl:'bananas'},
   'Trout':           {unit:200, step:1,   noun:'fillet',        nounPl:'fillets'},
@@ -1929,7 +1944,7 @@ function snapUnit(name, g){
 // beyond PTOL (default 0 = symmetric, so the cut is unchanged). Overshoot is nearly
 // free on a bulk — extra protein displaces carbs at equal kcal, so total calories
 // still land, and more protein while gaining is fine. Undershoot stays capped at PTOL.
-const TUNE = { spMin:0.35, spMax:2.6, srMin:0.3, srMax:3.2, VD:0.55, vMin:0.6, vMax:1.9, PTOL:5, PHI:0, PROP:2.6, DENS_DIV:900, PDLO:0.72, PDHI:1.4, BAND_GRACE:0.03, MAXDRIFT:0.12 };
+const TUNE = { spMin:0.35, spMax:2.6, srMin:0.3, srMax:3.2, VD:0.55, vMin:0.6, vMax:1.9, PTOL:5, PHI:5, PROP:2.6, DENS_DIV:900, PDLO:0.72, PDHI:1.4, BAND_GRACE:0.03, MAXDRIFT:0.12 };
 
 // Directional protein-fit test: achieved protein within [-PTOL, +(PTOL+PHI)] of target.
 function proteinFits(achP, P, T){ const d = Math.round(achP) - P; return d >= -T.PTOL && d <= T.PTOL + T.PHI; }
@@ -1937,7 +1952,26 @@ function proteinFits(achP, P, T){ const d = Math.round(achP) - P; return d >= -T
 function groupSums(ings){ let k=0,p=0; ings.forEach(ig=>{k+=ingKcal(ig); p+=ingP(ig);}); return {k,p}; }
 function solve2(a1,b1,c1,a2,b2,c2){ const det=a1*b2-b1*a2; if(Math.abs(det)<1e-6) return null; return [(c1*b2-b1*c2)/det,(a1*c2-c1*a2)/det]; }
 
-function solveMeal(meal, K, P, T=TUNE){
+function solveMeal(meal, K, P, T=TUNE, _bg){
+  // RATIO BINDERS: an ingredient tied by ratio to a base (e.g. yogurt to tuna) is not a
+  // free variable — its grams follow the base, so the base scales to hit protein/calories
+  // while the binder stays in proportion. Iterate: solve, read the base's grams, recompute
+  // the binder, resolve, until the binder estimate stops moving (converges in 1-3 passes).
+  const _R = meal.rules||null;
+  if(_bg===undefined && _R && meal.ings.some(ig=>_R[ig[0]]&&_R[ig[0]].ratioTo!=null)){
+    const hasList = meal.ings.some(ig=>_R[ig[0]]&&Array.isArray(_R[ig[0]].ratioTo));
+    let bgMap={},res,best=null,seen={};
+    for(let it=0; it<6; it++){
+      res=solveMeal(meal,K,P,T,bgMap);
+      if(hasList){ if(res.feasible && (!best||Math.abs(res.kcal-K)<Math.abs(best.kcal-K))) best=res; if(!res.feasible){ if(!best) return res; break; } }
+      else if(!res.feasible) return res;
+      let changed=false,next={};
+      meal.ings.forEach(ig=>{ const r=_R[ig[0]]; if(r&&r.ratioTo!=null){ const bases=Array.isArray(r.ratioTo)?r.ratioTo:[r.ratioTo]; let sum=0; bases.forEach(bn=>{ const pp=res.portions.find(x=>x.name===bn); sum+=pp?pp.grams:((meal.ings.find(x=>x[0]===bn)||[,0])[1]); }); let g=r.ratio*sum; if(r.max!=null&&g>r.max)g=r.max; if(r.min!=null&&g<r.min)g=r.min; if(UNIT[ig[0]]){ const sn=snapUnit(ig[0],g); g=sn?sn.grams:g; } else g=Math.max(5,Math.round(g/5)*5); next[ig[0]]=g; if(g!==bgMap[ig[0]])changed=true; }});
+      const key=JSON.stringify(next); bgMap=next;
+      if(!changed || (hasList&&seen[key])) break; seen[key]=1;
+    }
+    return hasList ? (best||res) : res;
+  }
   // band gate: don't scale a meal outside the range it was written for
   if(meal.band && (K < meal.band[0]*(1-T.BAND_GRACE) || K > meal.band[1]*(1+T.BAND_GRACE))) return {feasible:false};
 
@@ -1950,9 +1984,15 @@ function solveMeal(meal, K, P, T=TUNE){
   //        but not proportionally, so it never balloons to a mountain of vegetables.
   // The protein serving moves relative to the lever group; a drift guard (PROP) drops
   // any plate where that gap gets unnatural.
-  const Pg = meal.ings.filter(i=>i[6]==='P');
-  const Lg = meal.ings.filter(i=>i[6]==='S'||i[6]==='F');   // starch + fats = lever
-  const Xg = meal.ings.filter(i=>i[6]==='X');               // veg/sides = damped
+  const isBinder=(ig)=> _R && _R[ig[0]] && _R[ig[0]].ratioTo!=null;
+  const binderGramsEst=(ig)=>{ const r=_R[ig[0]];
+    if(_bg&&_bg[ig[0]]!=null) return _bg[ig[0]];
+    if(Array.isArray(r.ratioTo)){ let g=r.min!=null?r.min:(UNIT[ig[0]]?UNIT[ig[0]].unit:5); if(UNIT[ig[0]]){ const sn=snapUnit(ig[0],g); return sn?sn.grams:g; } return Math.max(5,Math.round(g/5)*5); }
+    const b=meal.ings.find(x=>x[0]===r.ratioTo); let g=r.ratio*(b?b[1]:ig[1]); if(r.max!=null&&g>r.max)g=r.max; if(r.min!=null&&g<r.min)g=r.min; return Math.max(5,Math.round(g/5)*5); };
+  let bK=0,bP=0; meal.ings.filter(isBinder).forEach(ig=>{ const g=binderGramsEst(ig), rr=g/ig[1]; bK+=ingKcal(ig)*rr; bP+=ig[2]*rr; });
+  const Pg = meal.ings.filter(i=>i[6]==='P' && !isBinder(i));
+  const Lg = meal.ings.filter(i=>(i[6]==='S'||i[6]==='F') && !isBinder(i));
+  const Xg = meal.ings.filter(i=>i[6]==='X' && !isBinder(i));
   const base = groupSums(meal.ings);
   const gp = groupSums(Pg), gl = groupSums(Lg), gx = groupSums(Xg);
   const s = K/base.k;                                        // overall meal scale
@@ -1964,27 +2004,27 @@ function solveMeal(meal, K, P, T=TUNE){
     // hit protein & calories with the veg fixed at scaleX:
     //   gp.p*sp + gl.p*sl = P - gx.p*scaleX
     //   gp.k*sp + gl.k*sl = K - gx.k*scaleX
-    const sol = solve2(gp.p, gl.p, P - gx.p*scaleX, gp.k, gl.k, K - gx.k*scaleX);
+    const sol = solve2(gp.p, gl.p, P - gx.p*scaleX - bP, gp.k, gl.k, K - gx.k*scaleX - bK);
     if(sol && sol[0]>=T.spMin && sol[0]<=T.spMax && sol[1]>=T.srMin && sol[1]<=T.srMax){
       scaleP=sol[0]; scaleL=sol[1]; mode='3lever';
     } else {
       // fallback: scale protein + lever TOGETHER to hit calories, protein floats in tol
-      const u=(K - gx.k*scaleX)/(gp.k+gl.k);
-      if(u>=T.srMin && u<=T.srMax && proteinFits(u*(gp.p+gl.p)+gx.p*scaleX, P, T)){
+      const u=(K - gx.k*scaleX - bK)/(gp.k+gl.k);
+      if(u>=T.srMin && u<=T.srMax && proteinFits(u*(gp.p+gl.p)+gx.p*scaleX+bP, P, T)){
         scaleP=u; scaleL=u; mode='coupled';
       } else return {feasible:false};
     }
   } else if(Lg.length){
     // no protein group: lever hits calories, protein floats
-    const u=(K - gx.k*scaleX)/gl.k;
+    const u=(K - gx.k*scaleX - bK)/gl.k;
     if(u<T.srMin||u>T.srMax) return {feasible:false};
-    if(!proteinFits(u*gl.p+gx.p*scaleX, P, T)) return {feasible:false};
+    if(!proteinFits(u*gl.p+gx.p*scaleX+bP, P, T)) return {feasible:false};
     scaleP=1; scaleL=u; mode='lever-only';
   } else {
     // only protein (+veg): protein hits calories, floats on protein
-    const u=(K - gx.k*scaleX)/gp.k;
+    const u=(K - gx.k*scaleX - bK)/gp.k;
     if(u<T.spMin||u>T.spMax) return {feasible:false};
-    if(!proteinFits(u*gp.p+gx.p*scaleX, P, T)) return {feasible:false};
+    if(!proteinFits(u*gp.p+gx.p*scaleX+bP, P, T)) return {feasible:false};
     scaleP=u; scaleL=1; mode='protein-only';
   }
 
@@ -1998,45 +2038,108 @@ function solveMeal(meal, K, P, T=TUNE){
   // solved scale, and freeze them. STEP 2: re-solve the CONTINUOUS protein and lever
   // ingredients to hit K and P around those frozen contributions, so the whole-unit
   // rounding is absorbed by the continuous foods instead of drifting the totals.
+  // PER-MEAL INGREDIENT RULES (optional meal.rules keyed by ingredient name):
+  //   fix:n  -> ingredient is locked to n grams (seasonings, binders, condiments)
+  //   max:n  -> ingredient never scales above n grams (a capped binder can't fake protein)
+  //   min:n  -> ingredient never scales below n grams
+  // A fixed or clamped ingredient is frozen just like a snapped whole-unit item, and the
+  // continuous ingredients re-solve around it. When a cap prevents the plate from reaching
+  // the slot's protein, the confinement check below drops the meal from that slot — which
+  // is how ingredient rules restrict a meal to the slots it can actually serve.
+  const rules = meal.rules || null;
+  let ruleApplied = false;
   const snapped = new Map(); // ingredient -> {grams, label}
-  let fixedK=0, fixedP=0;    // macro contribution of frozen (snapped) + veg ingredients
   meal.ings.forEach(ig=>{
     const g0=Math.max(5, Math.round(ig[1]*scaleOf(ig[6])/5)*5);
-    const snap=snapUnit(ig[0], g0);
-    if(snap){ const r=snap.grams/ig[1]; snapped.set(ig, {grams:snap.grams,label:snap.label}); fixedK+=ingKcal(ig)*r; fixedP+=ig[2]*r; }
+    const rule = rules && rules[ig[0]];
+    let frozenG=null, label=null;
+    if(rule && rule.ratioTo!=null){
+      if(Array.isArray(rule.ratioTo)){
+        let g=(_bg&&_bg[ig[0]]!=null)?_bg[ig[0]]:(rule.min!=null?rule.min:(UNIT[ig[0]]?UNIT[ig[0]].unit:5));
+        if(rule.max!=null&&g>rule.max)g=rule.max; if(rule.min!=null&&g<rule.min)g=rule.min;
+        if(UNIT[ig[0]]){ const sn=snapUnit(ig[0],g); frozenG=sn?sn.grams:g; label=sn?sn.label:null; } else frozenG=Math.max(5,Math.round(g/5)*5);
+      } else {
+        const b=meal.ings.find(x=>x[0]===rule.ratioTo); const bs=b&&snapped.get(b);
+        const bGrams=bs?bs.grams:(b?Math.max(5,Math.round(b[1]*scaleOf(b[6])/5)*5):ig[1]);
+        let g=rule.ratio*bGrams; if(rule.max!=null&&g>rule.max)g=rule.max; if(rule.min!=null&&g<rule.min)g=rule.min;
+        frozenG=Math.max(5,Math.round(g/5)*5);
+      }
+      ruleApplied=true;
+    }
+    else if(rule && rule.fix!=null){ frozenG=rule.fix; ruleApplied=true; const _sf=UNIT[ig[0]]?snapUnit(ig[0],rule.fix):null; label=(_sf&&_sf.grams===rule.fix)?_sf.label:null; }
+    else {
+      const snap=snapUnit(ig[0], g0);
+      if(snap){ frozenG=snap.grams; label=snap.label; }
+      if(rule && (rule.min!=null || rule.max!=null)){
+        // Freeze the ruled ingredient at its bounded value so the continuous re-solve
+        // below cannot scale it back out of [min,max]. Without this, a capped lever
+        // ingredient (e.g. soy sauce) gets re-inflated to absorb calories.
+        let g = frozenG!=null?frozenG:g0;
+        if(rule.max!=null && g>rule.max) g=rule.max;
+        if(rule.min!=null && g<rule.min) g=rule.min;
+        frozenG=g; ruleApplied=true;
+        const _sl = UNIT[ig[0]] ? snapUnit(ig[0], g) : null;   // show "1 can"/"3 eggs" when the locked amount is a clean unit multiple
+        label = (_sl && _sl.grams===g) ? _sl.label : null;
+      }
+    }
+    if(frozenG!=null){ snapped.set(ig, label?{grams:frozenG,label}:{grams:frozenG}); }
   });
-  // veg (X) is fixed at scaleX; its contribution is also "fixed" for the re-solve
-  const contP = Pg.filter(ig=>!snapped.has(ig));  // continuous protein ingredients
-  const contL = Lg.filter(ig=>!snapped.has(ig));  // continuous lever ingredients
-  const cp=groupSums(contP), cl=groupSums(contL);
-  const fixedFromX = { k: gx.k*scaleX, p: gx.p*scaleX };
-  // targets left for the continuous groups after frozen items + veg
-  const remK = K - fixedK - fixedFromX.k, remP = P - fixedP - fixedFromX.p;
-  if(cp.k>0 && cl.k>0){
-    const sol=solve2(cp.p,cl.p,remP, cp.k,cl.k,remK);
-    if(sol){ scaleP=sol[0]; scaleL=sol[1]; }
-  } else if(cl.k>0){ scaleL=remK/cl.k; }
-  else if(cp.k>0){ scaleP=remK/cp.k; }
-  // clamp so the absorb step can't produce a crazy portion; if it does, keep original scales
-  if(!(scaleP>=T.spMin*0.5 && scaleP<=T.spMax*1.5 && scaleL>=T.srMin*0.5 && scaleL<=T.srMax*1.5)){
-    scaleP = scaleOf('P'); // revert (unlikely)
-  }
+  // Build the plate from the current `snapped` set: re-solve the continuous protein and
+  // lever ingredients around the frozen items, then compute portions and totals. Called once
+  // normally, and again after each protein round-up bump below.
+  const buildPlate = () => {
+    let fixedK=0, fixedP=0;
+    snapped.forEach((sv,ig)=>{ const r=sv.grams/ig[1]; fixedK+=ingKcal(ig)*r; fixedP+=ig[2]*r; });
+    const contP = Pg.filter(ig=>!snapped.has(ig)), contL = Lg.filter(ig=>!snapped.has(ig));
+    const cp=groupSums(contP), cl=groupSums(contL);
+    const cxg = groupSums(Xg.filter(ig=>!snapped.has(ig)));  // veg not frozen by a rule (frozen veg already counted in fixedK)
+    const remK = K - fixedK - cxg.k*scaleX, remP = P - fixedP - cxg.p*scaleX;
+    let sP=scaleP, sL=scaleL;
+    if(cp.k>0 && cl.k>0){ const sol=solve2(cp.p,cl.p,remP, cp.k,cl.k,remK); if(sol){ sP=sol[0]; sL=sol[1]; } }
+    else if(cl.k>0){ sL=remK/cl.k; }
+    else if(cp.k>0){ sP=remK/cp.k; }
+    let aK=0,aP=0,aF=0,aC=0,aFib=0,grams=0,cookedGrams=0;
+    const portions = meal.ings.map(ig=>{
+      let g, label=null;
+      if(snapped.has(ig)){ const sv=snapped.get(ig); g=sv.grams; label=sv.label; }
+      else { const sc = ig[6]==='P'?sP : (ig[6]==='S'||ig[6]==='F')?sL : scaleX; g=Math.max(5, Math.round(ig[1]*sc/5)*5); }
+      const r=g/ig[1];
+      const ip=ig[2]*r, iff=ig[3]*r, ic=ig[4]*r, ifib=ig[5]*r, ik=kcalMacro(ip,iff,ic,ifib);
+      aK+=ik; aP+=ip; aF+=iff; aC+=ic; aFib+=ifib; grams+=g; cookedGrams += g * cookFactor(ig[0]);
+      const macro = { kcal:Math.round(ik), protein:Math.round(ip), carbs:Math.round(ic), fat:Math.round(iff), fiber:Math.round(ifib) };
+      return label ? {name:ig[0], grams:g, label, ...macro} : {name:ig[0], grams:g, ...macro};
+    });
+    return {portions, aK, aP, aF, aC, aFib, grams, cookedGrams, sP, sL};
+  };
 
-  let aK=0,aP=0,aF=0,aC=0,aFib=0,grams=0,cookedGrams=0;
-  const portions = meal.ings.map(ig=>{
-    let g, label=null;
-    if(snapped.has(ig)){ const s=snapped.get(ig); g=s.grams; label=s.label; }
-    else { const sc = ig[6]==='P'?scaleP : (ig[6]==='S'||ig[6]==='F')?scaleL : scaleX;
-      g=Math.max(5, Math.round(ig[1]*sc/5)*5); }
-    const r=g/ig[1];
-    const ip=ig[2]*r, iff=ig[3]*r, ic=ig[4]*r, ifib=ig[5]*r, ik=kcalMacro(ip,iff,ic,ifib);
-    aK+=ik; aP+=ip; aF+=iff; aC+=ic; aFib+=ifib; grams+=g;
-    cookedGrams += g * cookFactor(ig[0]);
-    // Per-ingredient macros for the scaled quantity, so the meal card is auditable
-    // line by line against a food tracker. kcal uses the same formula as the meal total.
-    const macro = { kcal:Math.round(ik), protein:Math.round(ip), carbs:Math.round(ic), fat:Math.round(iff), fiber:Math.round(ifib) };
-    return label ? {name:ig[0], grams:g, label, ...macro} : {name:ig[0], grams:g, ...macro};
-  });
+  // PROTEIN ROUND-UP: a discrete protein base (tuna in half-cans, whole eggs, noodle packs)
+  // snaps to the calorie-nearest unit, which usually lands just UNDER the slot's protein
+  // floor. Bump the leanest such base up one unit step when doing so moves the plate CLOSER
+  // to the slot's protein target (and stays under the ceiling), so the base leads and calories
+  // follow. The closer-to-target guard skips chunky overshoots (whole fillets/patties that
+  // would leap past the target) and sub-gram boundary rounding. Continuous proteins never
+  // trigger it, so it is additive: meals that already hit protein are untouched.
+  let plate = buildPlate(), _bumps=0;
+  while(plate.aP < P - T.PTOL && _bumps < 5){
+    const ceil = P + T.PTOL + T.PHI;
+    const cands=[];
+    for(const ig of meal.ings){
+      if(ig[6]!=='P' || !snapped.has(ig)) continue;
+      const U=UNIT[ig[0]]; if(!U) continue;
+      const r0 = rules && rules[ig[0]];
+      if(r0 && (r0.fix!=null || r0.max!=null || r0.ratioTo!=null)) continue;  // a cap/fix/ratio means don't push past it
+      const step=U.unit*U.step, next=snapped.get(ig).grams+step;
+      const dP=ig[2]*(step/ig[1]), dF=ig[3]*(step/ig[1]), nP=plate.aP+dP;
+      if(nP<=ceil && Math.abs(nP-P) < Math.abs(plate.aP-P)) cands.push({ig, next, lean: dF/Math.max(dP,0.1)});
+    }
+    if(!cands.length) break;                 // no bump improves the fit -> keep the plate as-is
+    cands.sort((a,b)=>a.lean-b.lean);         // leanest improving bump (tuna before eggs)
+    const pick=cands[0], ns=snapUnit(pick.ig[0], pick.next);
+    snapped.set(pick.ig, ns ? {grams:ns.grams, label:ns.label} : {grams:pick.next});
+    plate = buildPlate(); _bumps++;
+  }
+  scaleP = plate.sP; scaleL = plate.sL;
+  const { portions, aK, aP, aF, aC, aFib, grams, cookedGrams } = plate;
   const cookedDensity = aK/cookedGrams;
   // HARD VOLUME FLOOR: a meal must be at least as calorie-dense (cooked) as K/DENS_DIV,
   // so high-volume meals are excluded from high-calorie slots (a 900 kcal slot needs
@@ -2059,6 +2162,12 @@ function solveMeal(meal, K, P, T=TUNE){
   if(meal.min){
     for(const p of portions){ if(meal.min[p.name] && p.grams < meal.min[p.name]) return {feasible:false}; }
   }
+
+  // RULE CONFINEMENT: if a per-ingredient rule froze or clamped an ingredient, the plate
+  // can be pulled off the slot target (a capped binder can't reach the slot's protein).
+  // Keep the meal only where it still lands on protein — this confines a rule-constrained
+  // meal to the slots it genuinely fits. Rejection-only; no effect on meals without rules.
+  if(ruleApplied && !proteinFits(aP, P, T)) return {feasible:false};
 
   return { feasible:true, mode, portions,
     kcal:Math.round(aK), protein:Math.round(aP), fat:Math.round(aF), carbs:Math.round(aC), fiber:Math.round(aFib),
