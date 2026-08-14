@@ -1723,9 +1723,11 @@ const MEALS = [
     ings:[['Eggs',150,18,15,0,0,'P'],['Cottage cheese',250,28,10.8,8.5,0,'P'],['Bread',60,7,2.1,45.9*0.6,3.6,'S'],['Mushrooms',150,3,0,4.5,3,'X'],['Onion',150,1.6,0.2,11.5,2.5,'X'],['Bell pepper',150,1.5,0.4,5.8,3.1,'X'],['Oil',10,0,10,0,0,'F']] },
   { id:'chicken_potato', name:'Chicken & Baked Potatoes', band:[700,1550], mr:false, vg:'bakedpotato',
     diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:0},
+    cookFloor:{ of:'Potatoes (raw)', to:'Chicken thighs', ratio:1.2 },
     ings:[['Chicken thighs',200,40,8.2,0,0,'P'],['Potatoes (raw)',500,17.5,1,151.5,18,'S'],['Oil',10,0,10,0,0,'F']] },
-  { id:'mockmeat_potato', name:'Mock Meat & Baked Potatoes', band:[550,1250], mr:false, vg:'bakedpotato', plant:true,
+  { id:'mockmeat_potato', name:'Mock Meat & Baked Potatoes', band:[650,1250], mr:false, vg:'bakedpotato', plant:true,
     diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:0},
+    cookFloor:{ of:'Potatoes (raw)', to:'Plant-based burger', ratio:1.2 },
     rules:{ 'Plant-based burger':{stepBase:true,min:100,max:300,prefer:'less'}, 'Oil':{fix:10} },
     ings:[['Plant-based burger',200,34,26,8.8,1.8,'P'],['Potatoes (raw)',400,14,0.8,121.2,14.4,'S'],['Oil',10,0,10,0,0,'F']] },
   { id:'chickpea_pasta', name:'Chickpea or Lentil Pasta', band:[550,960], mr:false, vg:null,
@@ -2139,7 +2141,7 @@ function solveMeal(meal, K, P, T=TUNE, _bg){
         const b=meal.ings.find(x=>x[0]===rule.ratioTo); const bs=b&&snapped.get(b);
         const bGrams=bs?bs.grams:(b?Math.max(5,Math.round(b[1]*scaleOf(b[6])/5)*5):ig[1]);
         let g=rule.ratio*bGrams; if(rule.max!=null&&g>rule.max)g=rule.max; if(rule.min!=null&&g<rule.min)g=rule.min;
-        frozenG=Math.max(5,Math.round(g/5)*5);
+        if(UNIT[ig[0]]){ const sn=snapUnit(ig[0],g); frozenG=sn?sn.grams:g; label=sn?sn.label:null; } else frozenG=Math.max(5,Math.round(g/5)*5);
       }
       ruleApplied=true;
     }
