@@ -1616,8 +1616,9 @@ const MEALS = [
     diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:0},
     rules:{ 'Protein powder':{max:60}, 'Large banana':{max:240} },
     ings:[['Protein powder',60,47,1,1.9,0,'P'],['Large banana',270,3,0.9,55,7,'S']] },
-  { id:'bars_fruit', name:'Protein Bars & Fruit', band:[400,900], mr:true, vg:null,
+  { id:'bars_fruit', name:'Protein Bars & Fruit', band:[310,650], mr:true, vg:null,
     diet:{meat:0,pork:0,fish:0,dairy:1,egg:0,gluten:0},
+    rules:{ 'Quest bars (x2)':{stepBase:true,min:60,max:120}, 'Large apple':{stepBase:true,min:220,max:440} },
     ings:[['Quest bars (x2)',120,40,18,24,22,'P'],['Large apple',420,1.1,0.7,48,10,'S']] },
 
   // ---------------- DAYTIME / LEAN (300-700) ----------------
@@ -1726,8 +1727,9 @@ const MEALS = [
   { id:'mockmeat_potato', name:'Mock Meat & Baked Potatoes', band:[700,1600], mr:false, vg:'bakedpotato', plant:true,
     diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:0},
     ings:[['Plant-based burger',200,34,26,8.8,1.8,'P'],['Potatoes (raw)',400,14,0.8,121.2,14.4,'S'],['Oil',10,0,10,0,0,'F']] },
-  { id:'chickpea_pasta', name:'Chickpea or Lentil Pasta', band:[550,1250], mr:false, vg:null,
+  { id:'chickpea_pasta', name:'Chickpea or Lentil Pasta', band:[550,960], mr:false, vg:null,
     diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:0},
+    rules:{ 'Tomato-based sauce':{ratioTo:'Chickpea/lentil pasta (dry)',ratio:1.5,min:100} },
     ings:[['Chickpea/lentil pasta (dry)',200,54,3.6,116,25,'P'],['Tomato-based sauce',250,4,4,19.5,3.9,'F']] },
   { id:'beans_sausage', name:'Baked Beans & Sausages', band:[550,1200], mr:false, vg:'bakedbeans',
     diet:{meat:1,pork:1,fish:0,dairy:0,egg:0,gluten:0},
@@ -1743,10 +1745,12 @@ const MEALS = [
     ings:[['Chicken breast',150,30,4.5,0,0,'P'],['Falafel',150,12.3,13.4,33,11.4,'S'],['Hummus',100,7.8,18,9.5,5.5,'F'],['Tomato',150,1.3,0.3,4,1.8,'X'],['Carrots',100,0.9,0.2,6.8,2.8,'X'],['Red onion',50,0.6,0.1,3.8,0.9,'X'],['Oil',5,0,5,0,0,'F']] },
   { id:'chicken_noodles', name:'Chicken Noodles', band:[550,1250], mr:false, vg:'noodles',
     diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:1},
-    ings:[['Chicken breast',150,30,4.5,0,0,'P'],['Wheat noodles (dry)',100,13,1.5,74.7,3.2,'S'],['Asian veg mix',200,4,0.6,16.3,5.6,'X'],['Sweet chilli sauce',90,0.7,0.7,35.3,0,'F'],['Oil',5,0,5,0,0,'F']] },
-  { id:'tofu_noodles', name:'Tofu Noodles', band:[600,1400], mr:false, vg:'noodles', plant:true,
+    ings:[['Chicken breast',150,30,4.5,0,0,'P'],['Wheat noodles (dry)',100,13,1.5,74.7,3.2,'S'],['Asian veg mix',200,4,0.6,16.3,5.6,'X'],['Sweet chilli sauce',72,0.56,0.56,28.24,0,'F'],['Oil',5,0,5,0,0,'F']] },
+  { id:'tofu_noodles', name:'Tofu Noodles', band:[870,1140], mr:false, vg:'noodles', plant:true,
     diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:1},
-    ings:[['Smoked tofu',200,28,16,1.8,2,'P'],['Wheat noodles (dry)',100,13,1.5,74.7,3.2,'S'],['Asian veg mix',200,4,0.6,16.3,5.6,'X'],['Sweet chilli sauce',90,0.7,0.7,35.3,0,'F'],['Oil',5,0,5,0,0,'F']] },
+    rules:{ 'Smoked tofu':{max:200}, 'Asian veg mix':{max:150}, 'Oil':{fix:5} },
+    min:{ 'Wheat noodles (dry)':100 },
+    ings:[['Smoked tofu',200,28,16,1.8,2,'P'],['Wheat noodles (dry)',100,13,1.5,74.7,3.2,'S'],['Asian veg mix',200,4,0.6,16.3,5.6,'X'],['Sweet chilli sauce',72,0.56,0.56,28.24,0,'F'],['Oil',5,0,5,0,0,'F']] },
   { id:'burgers_meat', name:'Burgers & Carrot Sticks', band:[450,920], mr:false, vg:'burgers',
     diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:1},
     rules:{ 'Burger patties':{stepBase:true,min:100,max:300}, 'Burger buns':{ratioTo:'Burger patties',ratio:0.6}, 'Carrots':{max:250}, 'Onion slices':{fix:40}, 'Pickles':{fix:40}, 'Mustard':{fix:15}, 'Ketchup':{max:25} },
@@ -1778,6 +1782,7 @@ const MEALS = [
   // ---------------- PESCATARIAN DINNERS ----------------
   { id:'salmon_potato', name:'Salmon & Baked Potatoes', band:[600,1350], mr:false, vg:null,
     diet:{meat:0,pork:0,fish:1,dairy:0,egg:0,gluten:0},
+    cookFloor:{ of:'Potatoes (raw)', to:'Salmon', ratio:1.2 },
     ings:[['Salmon',200,42,8.8,0,0,'P'],['Potatoes (raw)',400,14,0.8,121.2,14.4,'S'],['Oil',10,0,10,0,0,'F']] },
   { id:'trout_rice', name:'Trout & Veggie Rice', band:[550,1300], mr:false, vg:null,
     diet:{meat:0,pork:0,fish:1,dairy:0,egg:0,gluten:0},
@@ -1793,18 +1798,21 @@ const MEALS = [
   { id:'quesadillas', name:'Cheese & Veggie Quesadillas', band:[700,1650], mr:false, vg:null,
     diet:{meat:0,pork:0,fish:0,dairy:1,egg:0,gluten:1},
     ings:[['Cheddar cheese',100,23,33,3.4,0,'P'],['Small tortillas',130,12.7,12.7,59.7,12.7,'S'],['Black beans (canned)',120,7.2,0.4,20,5,'S'],['Onion',100,1.1,0.1,7.6,1.7,'X'],['Bell pepper',100,1,0.3,3.9,2.1,'X'],['Oil',10,0,10,0,0,'F']] },
-  { id:'cheese_pasta', name:'Cheese & Veggie Pasta', band:[650,1450], mr:false, vg:null,
+  { id:'cheese_pasta', name:'Cheese & Veggie Pasta', band:[650,1150], mr:false, vg:null,
     diet:{meat:0,pork:0,fish:0,dairy:1,egg:0,gluten:1},
     ings:[['Mozzarella',100,22,22,2.4,0,'P'],['Cottage cheese',100,11,4.3,3.4,0,'P'],['Whole wheat pasta (dry)',100,14,2.9,72,9.2,'S'],['Frozen broccoli',100,2.8,0.4,4,2.6,'X'],['Cherry tomato',100,0.9,0.2,2.7,1.2,'X'],['Zucchini',150,1.8,0.4,3.2,1.5,'X'],['Garlic',15,1,0.1,5,0.3,'X'],['Oil',10,0,10,0,0,'F']] },
-  { id:'gallo_pinto', name:'Gallo Pinto with Fried Eggs', band:[650,1450], mr:false, vg:null,
+  { id:'gallo_pinto', name:'Gallo Pinto with Fried Eggs', band:[650,1140], mr:false, vg:null,
     diet:{meat:0,pork:0,fish:0,dairy:0,egg:1,gluten:0},
+    rules:{ 'Kidney beans (canned)':{fix:260} },
     ings:[['Eggs',250,30,25,0,0,'P'],['Brown rice (dry)',50,3.7,1.4,37,1.7,'S'],['Kidney beans (canned)',260,13.5,1,40,11.8,'S'],['Onion',100,1.1,0.1,7.6,1.7,'X'],['Bell pepper',100,1,0.3,3.9,2.1,'X'],['Garlic',10,0.6,0.1,3,0.2,'X'],['Oil',10,0,10,0,0,'F'],['Soy sauce',20,1.6,0.1,0.8,0,'F']] },
   // ---------------- ADDED: CHICKEN SANDWICHES + NOODLES ----------------
-  { id:'chicken_sandwiches', name:'Chicken Sandwiches', band:[600,1350], mr:false, vg:null,
+  { id:'chicken_sandwiches', name:'Chicken Sandwiches', band:[600,810], mr:false, vg:null,
     diet:{meat:1,pork:0,fish:0,dairy:0,egg:1,gluten:1},
+    rules:{ 'Chicken ham':{max:240}, 'Bread':{max:180}, 'Mustard':{max:50}, 'Mayo':{max:30}, 'Pickles':{max:100}, 'Iceberg lettuce':{max:100}, 'Cherry tomato':{max:100} },
     ings:[['Chicken ham',150,33,3.8,2.7,0,'P'],['Bread',180,22,6.3,67,10.8,'S'],['Pickles',100,0.5,0.3,1.4,1,'X'],['Mustard',50,1.9,1.6,0.9,2,'F'],['Mayo',30,0.3,23,0.2,0,'F'],['Iceberg lettuce',100,0.9,0.2,1.8,1.2,'X'],['Cherry tomato',100,0.9,0.2,2.7,1.2,'X']] },
-  { id:'chicken_sandwiches_apple', name:'Chicken Sandwiches & Apple', band:[450,1100], mr:false, vg:null,
+  { id:'chicken_sandwiches_apple', name:'Chicken Sandwiches & Apple', band:[450,770], mr:false, vg:null,
     diet:{meat:1,pork:0,fish:0,dairy:0,egg:1,gluten:1},
+    rules:{ 'Bread':{max:120}, 'Ketchup':{max:30}, 'Mayo':{max:20}, 'Pickles':{max:40}, 'Iceberg lettuce':{max:60}, 'Large apple':{max:220} },
     ings:[['Chicken ham',100,22,2.5,1.8,0,'P'],['Bread',120,14,4.2,44,7.2,'S'],['Pickles',75,0.4,0.2,1,0.7,'X'],['Ketchup',50,0.5,0.1,14,0.1,'F'],['Mayo',20,0.2,15,0.1,0,'F'],['Iceberg lettuce',100,0.9,0.2,1.8,1.2,'X'],['Large apple',220,0.6,0.4,24,5,'S']] },
   { id:'chicken_sandwiches_cucumber', name:'Chicken Sandwiches & Cucumber Salad', band:[620,760], mr:false, vg:null,
     diet:{meat:1,pork:0,fish:0,dairy:0,egg:1,gluten:1},
@@ -1858,8 +1866,9 @@ const MEALS = [
   { id:'tofu_rice', name:'Tofu Rice', band:[700,1300], mr:false, vg:null, plant:true,
     diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:0},
     ings:[['White rice',150,10.6,1,119,1.9,'S'],['Firm tofu',200,18,8.4,4,1.8,'P'],['Oil',20,0,20,0,0,'F'],['Onion',150,1.6,0.2,11.5,2.5,'X'],['Carrots',150,1.8,0.3,10.2,4.2,'X'],['Soy sauce',30,2.4,0.2,1.2,0.2,'F']] },
-  { id:'tofu_sandwiches', name:'Smoked Tofu Sandwiches', band:[700,1300], mr:false, vg:null, plant:true,
+  { id:'tofu_sandwiches', name:'Smoked Tofu Sandwiches', band:[600,960], mr:false, vg:null, plant:true,
     diet:{meat:0,pork:0,fish:0,dairy:0,egg:1,gluten:1},
+    rules:{ 'Smoked tofu':{max:240}, 'Bread':{max:180}, 'Mustard':{max:50}, 'Mayo':{max:30}, 'Pickles':{max:100}, 'Iceberg lettuce':{max:100}, 'Cherry tomato':{max:100} },
     ings:[['Smoked tofu',200,28,16,1.8,2,'P'],['Bread',180,22,6.3,67,10.8,'S'],['Pickles',100,0.5,0.3,1.4,1,'X'],['Mustard',50,1.9,1.6,0.9,2,'F'],['Mayo',30,0.3,23,0.2,0,'F'],['Iceberg lettuce',100,0.9,0.2,1.8,1.2,'X'],['Cherry tomato',100,0.9,0.2,2.7,1.2,'X']] },
   { id:'chickpea_wraps', name:'Chickpea Wraps', band:[850,1550], mr:false, vg:null, plant:true,
     diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:1},
@@ -1923,6 +1932,7 @@ const UNIT = {
   'Burger patties':  {unit:100, step:1,   noun:'patty',         nounPl:'patties'},
   'Instant noodle pack':{unit:75,step:1,  noun:'pack',          nounPl:'packs'},
   'Large apple':     {unit:220, step:1,   noun:'apple',         nounPl:'apples'},
+  'Quest bars (x2)': {unit:60,  step:1,   noun:'bar',           nounPl:'bars'},
   'Apple':           {unit:220, step:0.5, noun:'apple',         nounPl:'apples'},
   'Large banana':    {unit:120, step:1,   noun:'banana',        nounPl:'bananas'},
   'Medium banana':   {unit:100, step:1,   noun:'banana',        nounPl:'bananas'},
@@ -2005,22 +2015,30 @@ function solveMeal(meal, K, P, T=TUNE, _bg){
   // of the base (egg-forward: prefer adding an egg over adding cheese until the cap). This is
   // the eggs 2->3->4-with-cheese-dialing-inside-each-tier behaviour a shared scale can't give.
   // Rule: {stepBase:true, min:g, max:g} on the discrete ingredient (min/max grams -> unit counts).
-  // Reuses the fix path per tier; a meal without a stepBase rule never enters this branch.
-  const _SB = _R && meal.ings.find(ig=>_R[ig[0]] && _R[ig[0]].stepBase);
-  if(_bg===undefined && _SB && UNIT[_SB[0]]){
-    const r=_R[_SB[0]], U=UNIT[_SB[0]], stp=U.step;
-    const lo=Math.max(stp, Math.round((r.min!=null?r.min:U.unit)/(U.unit*stp))*stp);
-    const hi=Math.max(lo, Math.round((r.max!=null?r.max:U.unit)/(U.unit*stp))*stp);
-    let best=null, bestN=0;
-    for(let n=lo; n<=hi+1e-9; n+=stp){
-      const trial={...meal, rules:{...meal.rules, [_SB[0]]:{fix:Math.round(n*U.unit)}}};
-      const res=solveMeal(trial,K,P,T);          // trial has no stepBase rule -> won't re-enter this branch
+  // MULTIPLE step bases are allowed: with two (e.g. protein bars AND apples, no continuous filler)
+  // we try every whole-unit COMBINATION — 1 bar/2 apple, 2 bar/1 apple, 2 bar/2 apple — and keep the
+  // combination whose plate is closest to the slot, tie-breaking toward more of each base (or fewer,
+  // per prefer:'less'). One base behaves exactly as a single tier. Reuses the fix path per combo; a
+  // meal without any stepBase rule never enters this branch.
+  const _SBs = _R ? meal.ings.filter(ig=>_R[ig[0]] && _R[ig[0]].stepBase && UNIT[ig[0]]) : [];
+  if(_bg===undefined && _SBs.length){
+    const axes = _SBs.map(ig=>{ const r=_R[ig[0]], U=UNIT[ig[0]], stp=U.step;
+      const lo=Math.max(stp, Math.round((r.min!=null?r.min:U.unit)/(U.unit*stp))*stp);
+      const hi=Math.max(lo, Math.round((r.max!=null?r.max:U.unit)/(U.unit*stp))*stp);
+      const counts=[]; for(let n=lo; n<=hi+1e-9; n+=stp) counts.push(Math.round(n/stp)*stp);
+      return {name:ig[0], U, r, counts}; });
+    let combos=[[]]; for(const ax of axes){ const nxt=[]; for(const c of combos) for(const n of ax.counts) nxt.push([...c,n]); combos=nxt; }
+    let best=null, bd=0, bm=0;
+    for(const combo of combos){
+      const rules={...meal.rules};
+      combo.forEach((n,i)=>{ rules[axes[i].name]={fix:Math.round(n*axes[i].U.unit)}; });
+      const res=solveMeal({...meal, rules}, K, P, T);   // all step bases fixed -> won't re-enter this branch
       if(!res || !res.feasible) continue;
       const dNew=Math.abs(res.kcal-K);
-      if(!best){ best=res; bestN=n; continue; }
-      const dBest=Math.abs(best.kcal-K);
-      if(dNew < dBest - K*0.04){ best=res; bestN=n; }                    // clearly closer to target -> take it
-      else if(dNew <= dBest + K*0.04 && (r.prefer==='less' ? n<bestN : n>bestN)){ best=res; bestN=n; }   // near-tie -> prefer more of the base (or fewer, if prefer:'less')
+      const moreScore=combo.reduce((a,n,i)=>a+(axes[i].r.prefer==='less'?-n:n),0);   // higher = more of the bases (or fewer for prefer:'less')
+      if(!best){ best=res; bd=dNew; bm=moreScore; continue; }
+      if(dNew < bd - K*0.04){ best=res; bd=dNew; bm=moreScore; }                    // clearly closer to target
+      else if(dNew <= bd + K*0.04 && moreScore>bm){ best=res; bd=dNew; bm=moreScore; }  // near-tie -> preferred direction
     }
     return best || {feasible:false};
   }
@@ -2214,6 +2232,17 @@ function solveMeal(meal, K, P, T=TUNE, _bg){
   // only: if any named ingredient's solved portion is under its floor, drop the plate.
   if(meal.min){
     for(const p of portions){ if(meal.min[p.name] && p.grams < meal.min[p.name]) return {feasible:false}; }
+  }
+
+  // COOKED-RATIO FLOOR: keep one ingredient at least as large as another on the COOKED plate
+  // (e.g. baked potatoes >= salmon once cooking shrink is applied), leaving it free to run higher.
+  // Because two ingredients solving two targets have a determined split per slot, this simply
+  // routes the meal away from slots whose split would break the ratio. meal.cookFloor =
+  // {of, to, ratio}: reject if cooked(of) < ratio * cooked(to). Rejection-only.
+  if(meal.cookFloor){
+    const of=portions.find(p=>p.name===meal.cookFloor.of), to=portions.find(p=>p.name===meal.cookFloor.to);
+    if(of && to){ const cof=of.grams*cookFactor(of.name), cto=to.grams*cookFactor(to.name);
+      if(cof < meal.cookFloor.ratio*cto) return {feasible:false}; }
   }
 
   // RULE CONFINEMENT: if a per-ingredient rule froze or clamped an ingredient, the plate
