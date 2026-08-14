@@ -1626,9 +1626,10 @@ const MEALS = [
     diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:0},
     rules:{ 'Onion':{ratioTo:'Bell pepper', ratio:0.4, min:40, max:110}, 'Oil':{max:16}, 'Hot salsa':{min:80, max:150} },
     ings:[['Chicken breast',225,45,6.8,0,0,'P'],['Onion',250,2.8,0.2,19,4.2,'X'],['Bell pepper',250,2.5,0.8,9.8,5.2,'X'],['Oil',10,0,10,0,0,'F'],['Hot salsa',100,1.5,0.2,4.7,1.9,'F']] },
-  { id:'chicken_peas', name:'Chicken & Peas Skillet', band:[250,650], mr:false, vg:null,
+  { id:'chicken_peas', name:'Chicken & Peas Skillet', band:[300,665], mr:false, vg:null,
     diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:0},
-    ings:[['Chicken thighs',200,40,8.2,0,0,'P'],['Frozen peas',200,10.4,0.8,18.2,9,'X'],['Carrots',200,1.8,0.4,13.6,5.6,'X']] },
+    rules:{ 'Oil':{max:10}, 'Frozen peas':{ratioTo:'Chicken thighs',ratio:1.0,min:100}, 'Carrots':{ratioTo:'Chicken thighs',ratio:0.6,min:60} },
+    ings:[['Chicken thighs',200,40,8.2,0,0,'P'],['Frozen peas',200,10.4,0.8,18.2,9,'X'],['Carrots',200,1.8,0.4,13.6,5.6,'X'],['Oil',8,0,8,0,0,'F']] },
   { id:'chicken_greenbeans', name:'Chicken & Green Beans Skillet', band:[250,550], mr:false, vg:null,
     diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:0},
     ings:[['Chicken thighs',200,40,8.2,0,0,'P'],['Frozen green beans',200,3.6,0.4,8.6,5.4,'X'],['Carrots',200,1.8,0.4,13.6,5.6,'X']] },
@@ -1656,7 +1657,7 @@ const MEALS = [
     diet:{meat:0,pork:0,fish:0,dairy:1,egg:0,gluten:0},
     rules:{ 'Greek yogurt':{max:500}, 'Large apple':{max:220}, 'Large banana':{max:120} },
     ings:[['Greek yogurt',400,36,20,16,0,'P'],['Large apple',210,0.6,0.4,24,5,'S'],['Large banana',135,1.5,0.5,28,3.6,'S']] },
-  { id:'cottage_veg', name:'Cottage Cheese Veggie Bowl', band:[300,750], mr:false, vg:null,
+  { id:'cottage_veg', name:'Cottage Cheese Veggie Bowl', band:[300,525], mr:false, vg:null,
     diet:{meat:0,pork:0,fish:0,dairy:1,egg:0,gluten:0},
     ings:[['Cottage cheese',400,44,17.2,13.6,0,'P'],['Cucumber',150,0.4,0.2,2.4,0.4,'X'],['Tomato',150,1.4,0.3,4.1,1.8,'X'],['Carrot',100,0.9,0.2,6.8,2.8,'X'],['Red onion',50,0.6,0.1,3.8,0.8,'X']] },
   { id:'smoothie', name:'Protein Smoothie', band:[350,500], mr:false, vg:null,
@@ -1702,8 +1703,9 @@ const MEALS = [
     diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:0},
     rules:{ 'Carrots':{min:60,max:75}, 'Frozen green beans':{min:100,max:130} },
     ings:[['Chicken thighs',200,40,8.2,0,0,'P'],['Brown rice (dry)',50,3.8,1.6,37,1.8,'S'],['Frozen green beans',200,3.6,0.4,8.6,5.4,'X'],['Carrots',200,1.8,0.4,13.6,5.6,'X']] },
-  { id:'egg_platter', name:'Egg & Veggie Protein Platter', band:[500,1200], mr:false, vg:null,
+  { id:'egg_platter', name:'Egg & Veggie Protein Platter', band:[530,715], mr:false, vg:null,
     diet:{meat:0,pork:0,fish:0,dairy:0,egg:1,gluten:0},
+    rules:{ 'Eggs':{min:150,max:250}, 'Firm tofu':{max:200}, 'Hummus':{max:150}, 'Oil':{max:15} },
     ings:[['Eggs',150,18,15,0,0,'P'],['Firm tofu',200,18,8.4,4,1.8,'P'],['Hummus',100,7.8,18,9.5,5.5,'F'],['Oil',10,0,10,0,0,'F'],['Cherry tomato',150,1.4,0.3,4.1,1.8,'X'],['Cucumber',150,0.4,0.2,2.4,0.4,'X'],['Carrot',100,0.9,0.2,6.8,2.8,'X']] },
 
   // ---------------- DINNER / HIGHER CAL (600-1500) ----------------
@@ -1730,9 +1732,9 @@ const MEALS = [
     cookFloor:{ of:'Potatoes (raw)', to:'Plant-based burger', ratio:1.2 },
     rules:{ 'Plant-based burger':{stepBase:true,min:100,max:300,prefer:'less'}, 'Oil':{fix:10} },
     ings:[['Plant-based burger',200,34,26,8.8,1.8,'P'],['Potatoes (raw)',400,14,0.8,121.2,14.4,'S'],['Oil',10,0,10,0,0,'F']] },
-  { id:'chickpea_pasta', name:'Chickpea or Lentil Pasta', band:[550,960], mr:false, vg:null,
+  { id:'chickpea_pasta', name:'Chickpea or Lentil Pasta', band:[545,950], mr:false, vg:null,
     diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:0},
-    rules:{ 'Tomato-based sauce':{ratioTo:'Chickpea/lentil pasta (dry)',ratio:1.5,min:100} },
+    rules:{ 'Tomato-based sauce':{ratioTo:'Chickpea/lentil pasta (dry)',ratio:1.67,min:100} },
     ings:[['Chickpea/lentil pasta (dry)',200,54,3.6,116,25,'P'],['Tomato-based sauce',250,4,4,19.5,3.9,'F']] },
   { id:'beans_sausage', name:'Baked Beans & Sausages', band:[550,1200], mr:false, vg:'bakedbeans',
     diet:{meat:1,pork:1,fish:0,dairy:0,egg:0,gluten:0},
@@ -1746,7 +1748,7 @@ const MEALS = [
     diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:0},
     rules:{ 'Chicken breast':{min:130}, 'Falafel':{min:60,max:150}, 'Hummus':{min:40,max:100}, 'Red onion':{max:40}, 'Oil':{max:6} },
     ings:[['Chicken breast',150,30,4.5,0,0,'P'],['Falafel',150,12.3,13.4,33,11.4,'S'],['Hummus',100,7.8,18,9.5,5.5,'F'],['Tomato',150,1.3,0.3,4,1.8,'X'],['Carrots',100,0.9,0.2,6.8,2.8,'X'],['Red onion',50,0.6,0.1,3.8,0.9,'X'],['Oil',5,0,5,0,0,'F']] },
-  { id:'chicken_noodles', name:'Chicken Noodles', band:[550,1250], mr:false, vg:'noodles',
+  { id:'chicken_noodles', name:'Chicken Noodles', band:[550,1195], mr:false, vg:'noodles',
     diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:1},
     ings:[['Chicken breast',150,30,4.5,0,0,'P'],['Wheat noodles (dry)',100,13,1.5,74.7,3.2,'S'],['Asian veg mix',200,4,0.6,16.3,5.6,'X'],['Sweet chilli sauce',72,0.56,0.56,28.24,0,'F'],['Oil',5,0,5,0,0,'F']] },
   { id:'tofu_noodles', name:'Tofu Noodles', band:[870,1140], mr:false, vg:'noodles', plant:true,
@@ -1754,33 +1756,37 @@ const MEALS = [
     rules:{ 'Smoked tofu':{max:200}, 'Asian veg mix':{max:150}, 'Oil':{fix:5} },
     min:{ 'Wheat noodles (dry)':100 },
     ings:[['Smoked tofu',200,28,16,1.8,2,'P'],['Wheat noodles (dry)',100,13,1.5,74.7,3.2,'S'],['Asian veg mix',200,4,0.6,16.3,5.6,'X'],['Sweet chilli sauce',72,0.56,0.56,28.24,0,'F'],['Oil',5,0,5,0,0,'F']] },
-  { id:'burgers_meat', name:'Burgers & Carrot Sticks', band:[450,920], mr:false, vg:'burgers',
+  { id:'burgers_meat', name:'Burgers & Carrot Sticks', band:[510,900], mr:false, vg:'burgers',
     diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:1},
-    rules:{ 'Burger patties':{stepBase:true,min:100,max:300}, 'Burger buns':{ratioTo:'Burger patties',ratio:0.6}, 'Carrots':{max:250}, 'Onion slices':{fix:40}, 'Pickles':{fix:40}, 'Mustard':{fix:15}, 'Ketchup':{max:25} },
-    ings:[['Burger patties',200,34,30,4.2,0,'P'],['Burger buns',120,11.8,4.7,58,2.1,'S'],['Carrots',200,1.8,0.4,13.6,5.6,'X'],['Onion slices',50,0.6,0.1,3.8,0.9,'X'],['Pickles',50,0.2,0.2,0.7,0.5,'X'],['Mustard',50,1.9,1.6,0.9,2,'F'],['Ketchup',50,0.5,0.1,14,0.1,'F']] },
-  { id:'burgers_plant', name:'Plant Burgers & Carrot Sticks', band:[450,920], mr:false, vg:'burgers', plant:true,
+    rules:{ 'Burger patties':{stepBase:true,min:100,max:300}, 'Burger buns':{ratioTo:'Burger patties',ratio:0.6}, 'Carrots':{max:200}, 'Onion slices':{fix:40}, 'Pickles':{fix:40}, 'Mustard':{fix:15}, 'Ketchup':{max:25} },
+    ings:[['Burger patties',200,34,30,4.2,0,'P'],['Burger buns',120,11.8,4.7,58,2.1,'S'],['Carrots',200,1.8,0.4,13.6,5.6,'S'],['Onion slices',50,0.6,0.1,3.8,0.9,'X'],['Pickles',50,0.2,0.2,0.7,0.5,'X'],['Mustard',50,1.9,1.6,0.9,2,'F'],['Ketchup',50,0.5,0.1,14,0.1,'F']] },
+  { id:'burgers_plant', name:'Plant Burgers & Carrot Sticks', band:[510,900], mr:false, vg:'burgers', plant:true,
     diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:1},
-    rules:{ 'Plant-based burger':{stepBase:true,min:100,max:300}, 'Burger buns':{ratioTo:'Plant-based burger',ratio:0.6}, 'Carrots':{max:250}, 'Onion slices':{fix:40}, 'Pickles':{fix:40}, 'Mustard':{fix:15}, 'Ketchup':{max:25} },
-    ings:[['Plant-based burger',200,34,26,8.8,1.8,'P'],['Burger buns',120,11.8,4.7,58,2.1,'S'],['Carrots',200,1.8,0.4,13.6,5.6,'X'],['Onion slices',50,0.6,0.1,3.8,0.9,'X'],['Pickles',50,0.2,0.2,0.7,0.5,'X'],['Mustard',50,1.9,1.6,0.9,2,'F'],['Ketchup',50,0.5,0.1,14,0.1,'F']] },
-  { id:'wraps_meat', name:'Wraps', band:[550,1200], mr:false, vg:'wraps',
+    rules:{ 'Plant-based burger':{stepBase:true,min:100,max:300}, 'Burger buns':{ratioTo:'Plant-based burger',ratio:0.6}, 'Carrots':{max:200}, 'Onion slices':{fix:40}, 'Pickles':{fix:40}, 'Mustard':{fix:15}, 'Ketchup':{max:25} },
+    ings:[['Plant-based burger',200,34,26,8.8,1.8,'P'],['Burger buns',120,11.8,4.7,58,2.1,'S'],['Carrots',200,1.8,0.4,13.6,5.6,'S'],['Onion slices',50,0.6,0.1,3.8,0.9,'X'],['Pickles',50,0.2,0.2,0.7,0.5,'X'],['Mustard',50,1.9,1.6,0.9,2,'F'],['Ketchup',50,0.5,0.1,14,0.1,'F']] },
+  { id:'wraps_meat', name:'Wraps', band:[550,1185], mr:false, vg:'wraps',
     diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:1},
-    ings:[['Ground meat',100,21,7.1,0,0,'P'],['Lentils (canned)',200,10.8,0.8,28,13,'S'],['Small tortillas',130,12.7,12.7,59.7,12.7,'S'],['Onion',100,1.1,0.1,7.6,1.7,'X'],['Bell pepper',100,1,0.3,3.9,2.1,'X'],['Romaine',100,1.2,0.3,1.2,2.1,'X'],['Hot salsa',150,2.2,0.3,7.1,2.8,'F']] },
-  { id:'wraps_plant', name:'Wraps', band:[550,1250], mr:false, vg:'wraps', plant:true,
+    rules:{ 'Small tortillas':{stepBase:true,min:80,max:240}, 'Hot salsa':{ratioTo:'Small tortillas',ratio:0.375}, 'Bell pepper':{max:150}, 'Romaine':{max:150} },
+    ings:[['Ground meat',100,21,7.1,0,0,'P'],['Lentils (canned)',200,10.8,0.8,28,13,'S'],['Small tortillas',130,12.7,12.7,59.7,12.7,'S'],['Onion',70,0.8,0.1,5.3,1.2,'X'],['Bell pepper',100,1,0.3,3.9,2.1,'X'],['Romaine',100,1.2,0.3,1.2,2.1,'X'],['Hot salsa',150,2.2,0.3,7.1,2.8,'F']] },
+  { id:'wraps_plant', name:'Wraps', band:[550,1185], mr:false, vg:'wraps', plant:true,
     diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:1},
-    ings:[['Plant-based mince',100,14,8.6,9.4,0,'P'],['Lentils (canned)',200,10.8,0.8,28,13,'S'],['Small tortillas',130,12.7,12.7,59.7,12.7,'S'],['Onion',100,1.1,0.1,7.6,1.7,'X'],['Bell pepper',100,1,0.3,3.9,2.1,'X'],['Romaine',100,1.2,0.3,1.2,2.1,'X'],['Hot salsa',150,2.2,0.3,7.1,2.8,'F']] },
+    rules:{ 'Small tortillas':{stepBase:true,min:80,max:240}, 'Hot salsa':{ratioTo:'Small tortillas',ratio:0.375}, 'Bell pepper':{max:150}, 'Romaine':{max:150} },
+    ings:[['Plant-based mince',100,14,8.6,9.4,0,'P'],['Lentils (canned)',200,10.8,0.8,28,13,'S'],['Small tortillas',130,12.7,12.7,59.7,12.7,'S'],['Onion',70,0.8,0.1,5.3,1.2,'X'],['Bell pepper',100,1,0.3,3.9,2.1,'X'],['Romaine',100,1.2,0.3,1.2,2.1,'X'],['Hot salsa',150,2.2,0.3,7.1,2.8,'F']] },
   { id:'burrito_lg', name:'Loaded Burrito Bowl', band:[420,600], mr:false, vg:'burritolg',
     diet:{meat:1,pork:0,fish:0,dairy:1,egg:0,gluten:0},
     rules:{ 'Sweet corn':{min:40,max:50}, 'Greek yogurt':{min:40,max:45}, 'Onion':{min:20,max:30}, 'Cheddar cheese':{max:20} },
     ings:[['Ground meat',150,32,10.6,0,0,'P'],['Kidney beans',150,7.8,0.6,22,6.5,'S'],['Sweet corn',150,3.5,1.8,26,3,'S'],['Greek yogurt',150,13.5,7.5,6,0,'P'],['Cheddar cheese',15,3.75,5,0.2,0,'F'],['Romaine',100,1.2,0.3,1.2,2.1,'X'],['Onion',100,1.1,0.1,7.6,1.7,'X'],['Tomato',150,1.3,0.3,4,1.8,'X']] },
-  { id:'burrito_vegan', name:'Vegan Burrito Bowl', band:[400,900], mr:false, vg:'burritolg', plant:true,
+  { id:'burrito_vegan', name:'Vegan Burrito Bowl', band:[400,680], mr:false, vg:'burritolg', plant:true,
     diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:0},
+    rules:{ 'Sweet corn':{min:40,max:50}, 'Soy yogurt':{min:40,max:45}, 'Onion':{min:20,max:30} },
     ings:[['Plant-based mince',100,14,8.6,9.4,0,'P'],['Kidney beans',150,7.8,0.6,22,6.5,'S'],['Sweet corn',150,3.5,1.8,26,3,'S'],['Soy yogurt',150,5.4,2.7,14.6,1.5,'P'],['Romaine',100,1.2,0.3,1.2,2.1,'X'],['Onion',100,1.1,0.1,7.6,1.7,'X'],['Tomato',150,1.3,0.3,4,1.8,'X']] },
   { id:'chili_meat', name:'Chili', band:[500,760], mr:false, vg:'chili',
     diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:0},
     rules:{ 'Ground meat':{min:120,max:220}, 'Kidney beans':{min:130,max:260}, 'Oil':{fix:9}, 'Diced tomatoes (can)':{fix:200}, 'Onion':{min:120,max:180}, 'Carrot':{fix:100}, 'Chilli peppers (x2)':{fix:75} },
     ings:[['Ground meat',150,32,10.6,0,0,'P'],['Kidney beans',260,13.5,1,40,11.8,'P'],['Diced tomatoes (can)',400,3.2,0.4,12,4,'F'],['Onion',150,1.6,0.2,11.5,2.5,'X'],['Carrot',100,0.9,0.2,6.8,2.8,'X'],['Chilli peppers (x2)',75,1.5,0.5,4.5,0,'X'],['Oil',10,0,10,0,0,'F']] },
-  { id:'chili_vegan', name:'Vegan Chili', band:[500,1150], mr:false, vg:'chili', plant:true,
+  { id:'chili_vegan', name:'Vegan Chili', band:[530,780], mr:false, vg:'chili', plant:true,
     diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:0},
+    rules:{ 'Plant-based mince':{min:120,max:220}, 'Kidney beans':{min:130,max:260}, 'Oil':{fix:9}, 'Diced tomatoes (can)':{fix:200}, 'Onion':{min:120,max:180}, 'Carrot':{fix:100}, 'Chilli peppers (x2)':{fix:75} },
     ings:[['Plant-based mince',150,21,12.9,14.1,0,'P'],['Kidney beans',260,13.5,1,40,11.8,'P'],['Diced tomatoes (can)',400,3.2,0.4,12,4,'F'],['Onion',150,1.6,0.2,11.5,2.5,'X'],['Carrot',100,0.9,0.2,6.8,2.8,'X'],['Chilli peppers (x2)',75,1.5,0.5,4.5,0,'X'],['Oil',10,0,10,0,0,'F']] },
 
   // ---------------- PESCATARIAN DINNERS ----------------
@@ -1797,9 +1803,10 @@ const MEALS = [
     ings:[['Tuna (drained)',130,25,1.3,0,0,'P'],['Wheat pasta (dry)',100,13,1.5,74.7,0,'S'],['Olive oil',15,0,15,0,0,'F'],['Lemon juice',50,0.2,0.1,3.3,0,'F'],['Garlic clove',5,0.2,0,1,0,'X'],['Green olives',25,0.2,4,0.1,0.8,'F']] },
 
   // ---------------- VEGETARIAN DINNERS (eggs + higher-fat cheese; also for bulk) ----------------
-  { id:'frittata', name:'Cottage Cheese & Veggie Frittata', band:[650,1550], mr:false, vg:null,
+  { id:'frittata', name:'Cottage Cheese & Veggie Frittata', band:[625,1170], mr:false, vg:null,
     diet:{meat:0,pork:0,fish:0,dairy:1,egg:1,gluten:0},
-    ings:[['Eggs',250,30,25,0,0,'P'],['Cottage cheese',100,11,4.3,3.4,0,'P'],['Cheddar cheese',80,18,26,2.7,0,'P'],['Spinach',50,1.5,0.2,0.7,1.1,'X'],['Red onion',150,1.6,0.2,11.5,2.5,'X'],['Bell pepper',150,1.5,0.4,5.8,3.1,'X'],['Tomato',150,1.4,0.3,4.1,1.8,'X'],['Oil',10,0,10,0,0,'F']] },
+    rules:{ 'Cottage cheese':{ratioTo:'Eggs',ratio:0.35,min:40}, 'Cheddar cheese':{ratioTo:'Eggs',ratio:0.28,min:30}, 'Oil':{max:15} },
+    ings:[['Eggs',250,30,25,0,0,'P'],['Cottage cheese',100,11,4.3,3.4,0,'P'],['Cheddar cheese',80,18,26,2.7,0,'P'],['Spinach',50,1.5,0.2,0.7,1.1,'X'],['Red onion',70,0.75,0.1,5.4,1.2,'X'],['Bell pepper',150,1.5,0.4,5.8,3.1,'X'],['Tomato',150,1.4,0.3,4.1,1.8,'X'],['Oil',10,0,10,0,0,'F']] },
   { id:'quesadillas', name:'Cheese & Veggie Quesadillas', band:[900,1330], mr:false, vg:null,
     diet:{meat:0,pork:0,fish:0,dairy:1,egg:0,gluten:1},
     rules:{ 'Small tortillas':{stepBase:true,min:120,max:160,prefer:'more'}, 'Cheddar cheese':{ratioTo:'Small tortillas',ratio:0.75,ratioMin:0.625,ratioMax:1.0,min:60} },
@@ -1807,9 +1814,9 @@ const MEALS = [
   { id:'cheese_pasta', name:'Cheese & Veggie Pasta', band:[650,1150], mr:false, vg:null,
     diet:{meat:0,pork:0,fish:0,dairy:1,egg:0,gluten:1},
     ings:[['Mozzarella',100,22,22,2.4,0,'P'],['Cottage cheese',100,11,4.3,3.4,0,'P'],['Whole wheat pasta (dry)',100,14,2.9,72,9.2,'S'],['Frozen broccoli',100,2.8,0.4,4,2.6,'X'],['Cherry tomato',100,0.9,0.2,2.7,1.2,'X'],['Zucchini',150,1.8,0.4,3.2,1.5,'X'],['Garlic',15,1,0.1,5,0.3,'X'],['Oil',10,0,10,0,0,'F']] },
-  { id:'gallo_pinto', name:'Gallo Pinto with Fried Eggs', band:[650,1140], mr:false, vg:null,
+  { id:'gallo_pinto', name:'Gallo Pinto with Fried Eggs', band:[650,1085], mr:false, vg:null,
     diet:{meat:0,pork:0,fish:0,dairy:0,egg:1,gluten:0},
-    rules:{ 'Kidney beans (canned)':{fix:260} },
+    rules:{ 'Kidney beans (canned)':{fix:260}, 'Oil':{max:12} },
     ings:[['Eggs',250,30,25,0,0,'P'],['Brown rice (dry)',50,3.7,1.4,37,1.7,'S'],['Kidney beans (canned)',260,13.5,1,40,11.8,'S'],['Onion',100,1.1,0.1,7.6,1.7,'X'],['Bell pepper',100,1,0.3,3.9,2.1,'X'],['Garlic',10,0.6,0.1,3,0.2,'X'],['Oil',10,0,10,0,0,'F'],['Soy sauce',20,1.6,0.1,0.8,0,'F']] },
   // ---------------- ADDED: CHICKEN SANDWICHES + NOODLES ----------------
   { id:'chicken_sandwiches', name:'Chicken Sandwiches', band:[600,810], mr:false, vg:null,
@@ -1820,7 +1827,7 @@ const MEALS = [
     diet:{meat:1,pork:0,fish:0,dairy:0,egg:1,gluten:1},
     rules:{ 'Bread':{max:120}, 'Ketchup':{max:30}, 'Mayo':{max:20}, 'Pickles':{max:40}, 'Iceberg lettuce':{max:60}, 'Large apple':{max:220} },
     ings:[['Chicken ham',100,22,2.5,1.8,0,'P'],['Bread',120,14,4.2,44,7.2,'S'],['Pickles',75,0.4,0.2,1,0.7,'X'],['Ketchup',50,0.5,0.1,14,0.1,'F'],['Mayo',20,0.2,15,0.1,0,'F'],['Iceberg lettuce',100,0.9,0.2,1.8,1.2,'X'],['Large apple',220,0.6,0.4,24,5,'S']] },
-  { id:'chicken_sandwiches_cucumber', name:'Chicken Sandwiches & Cucumber Salad', band:[620,760], mr:false, vg:null,
+  { id:'chicken_sandwiches_cucumber', name:'Chicken Sandwiches & Cucumber Salad', band:[620,715], mr:false, vg:null,
     diet:{meat:1,pork:0,fish:0,dairy:0,egg:1,gluten:1},
     rules:{ 'Chicken ham':{max:175}, 'Bread':{min:120}, 'Pickles':{max:50}, 'Ketchup':{max:20}, 'Mayo':{fix:15}, 'Iceberg lettuce':{max:60}, 'Onion':{max:60}, 'Balsamic vinegar':{max:20} },
     ings:[['Chicken ham',100,22,2.5,1.8,0,'P'],['Bread',120,14,4.2,44,7.2,'S'],['Pickles',75,0.4,0.2,1,0.7,'X'],['Ketchup',50,0.5,0.1,14,0.1,'F'],['Mayo',20,0.2,15,0.1,0,'F'],['Iceberg lettuce',100,0.9,0.2,1.8,1.2,'X'],['Cucumber',200,0.6,0.2,3.2,0.5,'X'],['Onion',100,1.1,0.1,7.6,1.7,'X'],['Balsamic vinegar',50,0.2,0,9,0,'F']] },
@@ -1838,7 +1845,7 @@ const MEALS = [
     diet:{meat:0,pork:0,fish:0,dairy:1,egg:0,gluten:1},
     rules:{ 'Parmesan':{ratioTo:'White pasta (dry)',ratio:0.38,min:50} },
     ings:[['White pasta (dry)',200,26,3,149.3,6.4,'S'],['Parmesan',50,18,13,1.7,0,'P'],['Black pepper',3,0.3,0.1,1.6,0.8,'X']] },
-  { id:'spaghetti_bolognaise', name:'Spaghetti Bolognaise', band:[700,1130], mr:false, vg:null,
+  { id:'spaghetti_bolognaise', name:'Spaghetti Bolognaise', band:[835,1105], mr:false, vg:null,
     diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:1},
     rules:{ 'Bolognaise sauce (canned)':{ratioTo:'White pasta (dry)',ratio:2.5,min:100}, 'Olive oil':{ratioTo:'White pasta (dry)',ratio:0.09,min:5,max:20} },
     ings:[['White pasta (dry)',200,26,3,149.3,6.4,'S'],['Bolognaise sauce (canned)',400,19.6,12.4,26,0,'P'],['Olive oil',8,0,8,0,0,'F']] },
@@ -1853,15 +1860,15 @@ const MEALS = [
     diet:{meat:0,pork:0,fish:0,dairy:1,egg:0,gluten:1},
     rules:{ 'Small tortillas':{stepBase:true,min:120,max:240,prefer:'more'}, 'Cheddar cheese':{ratioTo:'Small tortillas',ratio:0.75,min:60} },
     ings:[['Small tortillas',195,19,19,70,19,'S'],['Cheddar cheese',100,23,33,3.4,0,'P'],['Red kidney beans (canned)',150,7.8,0.6,17,0,'S']] },
-  { id:'pb_quesadillas', name:'Peanut Butter Quesadillas', band:[620,1280], mr:false, vg:'pb_banana', plant:true,
+  { id:'pb_quesadillas', name:'Peanut Butter Quesadillas', band:[785,1330], mr:false, vg:'pb_banana', plant:true,
     diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:1},
-    rules:{ 'Small tortillas':{stepBase:true,min:80,max:240}, 'Peanut butter':{ratioTo:'Small tortillas',ratioMin:0.625,ratioMax:0.875} },
+    rules:{ 'Small tortillas':{stepBase:true,min:80,max:240}, 'Peanut butter':{ratioTo:'Small tortillas',ratioMin:0.625,ratioMax:1.0} },
     ings:[['Small tortillas',130,12.7,12.7,47,12.7,'S'],['Peanut butter',60,13,31,10,3,'P'],['Large banana',120,1.5,0.5,28,3.6,'S'],['Granola',20,2,2,13,0,'F']] },
   { id:'chicken_buttered_rice', name:'Chicken Buttered Rice', band:[650,1550], mr:false, vg:null,
     diet:{meat:1,pork:0,fish:0,dairy:1,egg:0,gluten:0},
     rules:{ 'Butter':{ratioTo:'White rice',ratio:0.16,min:5,max:60} },
     ings:[['White rice',200,14.2,1.4,158,2.6,'S'],['Chicken thighs (no skin)',100,20,4.1,0,0,'P'],['Butter',30,0.3,24,0,0,'F']] },
-  { id:'meat_potato_fries', name:'Chicken & Fries', band:[700,1550], mr:false, vg:null,
+  { id:'meat_potato_fries', name:'Chicken & Fries', band:[700,1435], mr:false, vg:null,
     diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:0},
     cookFloor:{ of:'Frozen potato fries (raw)', to:'Chicken thighs (no skin)', ratio:1.0 },
     ings:[['Chicken thighs (no skin)',200,40,8.2,0,0,'P'],['Frozen potato fries (raw)',400,9.6,18,97.2,11.2,'S'],['Pickles',75,0.4,0.2,1.05,0.75,'X'],['Garlic sauce',50,1.7,9.9,3.1,0.9,'F'],['Ketchup',50,0.5,0.1,14,0.1,'F']] },
@@ -1877,7 +1884,7 @@ const MEALS = [
     ings:[['Plant-based burger',200,34,26,8.8,1.8,'P'],['Frozen potato fries (raw)',200,4.8,9,48.6,5.6,'S'],['Burger buns',120,11.8,4.7,58,2.1,'S'],['Onion slices',50,0.6,0.1,3.8,0.9,'X'],['Pickles',50,0.2,0.2,0.7,0.5,'X'],['Mustard',50,1.9,1.6,0.9,2,'F'],['Ketchup',50,0.5,0.1,14,0.1,'F']] },
 
   // ---------------- ADDED: VEGAN MID-BAND MEALS ----------------
-  { id:'tofu_rice', name:'Tofu Rice', band:[700,1300], mr:false, vg:null, plant:true,
+  { id:'tofu_rice', name:'Tofu Rice', band:[700,1165], mr:false, vg:null, plant:true,
     diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:0},
     rules:{ 'Oil':{max:25} },
     ings:[['White rice',150,10.6,1,119,1.9,'S'],['Firm tofu',200,18,8.4,4,1.8,'P'],['Oil',20,0,20,0,0,'F'],['Onion',150,1.6,0.2,11.5,2.5,'X'],['Carrots',150,1.8,0.3,10.2,4.2,'X'],['Soy sauce',30,2.4,0.2,1.2,0.2,'F']] },
@@ -2670,7 +2677,7 @@ const TARGET_OPTIONS = 6;
 // reordering), rendered as a vertical list tagged with each meal's id. This is a
 // review surface for deciding which meals belong in which slot. Set to false to
 // restore the normal curated carousels (TARGET_OPTIONS per slot).
-const REVIEW_MODE = true;
+const REVIEW_MODE = false;
 const NO_RECIPE = new Set(['huel','shake_fruit','bars_fruit','smoothie','yogurt_mixfruit','yogurt_fruit','cottage_veg','tuna_salad']);
 
 const hasStarch = (m)=> m.ings.some(i=>i[6]==='S');
@@ -2720,48 +2727,17 @@ function selectCarousels(realMeals, structure, answers){
       })) });
       return;
     }
-    const starchOK = K>=STARCH_SLOT_MIN || evenPlan;
-    let pool = MEALS
-      .filter(m => eligible(m,restriction) && (!m.mr || allowMR) && (!hasStarch(m) || starchOK) && !(m.vg && usedVg.has(m.vg)))
+    // Full feasible menu for this slot: every meal that matches the dietary
+    // restriction and the meal-replacement preference and solves for (K,P). No
+    // curation cap — the user scrolls through all of them, however many there are.
+    // Sorted by density in the plan's direction (low-first for cut/cautious,
+    // high-first for hardgainer, neutral for balanced bulk), then fit, then id.
+    const all = MEALS
+      .filter(m => eligible(m, restriction) && (!m.mr || allowMR))
       .map(m => ({ m, solved: solveMeal(m, K, P, solveTune) }))
-      .filter(o => o.solved.feasible);
-    // Pool order: unused meals first, then by density in the chosen direction (so
-    // the category-balanced picker below draws from the low- or high-density end),
-    // then fit, then a stable id tiebreak. densDir=0 (balanced bulk) falls straight
-    // through to fit order, matching the pre-density behavior.
-    pool.sort((a,b)=> (usedIds.has(a.m.id)?1:0)-(usedIds.has(b.m.id)?1:0)
-      || densDir*(a.solved.density-b.solved.density)
-      || fit(a.solved)-fit(b.solved)
-      || (a.m.id<b.m.id?-1:1));
-
-    const picked=[]; let mrCount=0; const localVg=new Set(); const catCount={};
-    const canTake=(o)=> !picked.includes(o) && !(o.m.vg && localVg.has(o.m.vg)) && !(o.m.mr && mrCount>=MR_CAP);
-    const take=(o)=>{ picked.push(o); if(o.m.mr)mrCount++; if(o.m.vg)localVg.add(o.m.vg); catCount[category(o.m)]=(catCount[category(o.m)]||0)+1; };
-    // category-balanced greedy: least-used category first, then pool order (density/fit)
-    const pickOne=()=>{ let best=null,bk=null; for(let i=0;i<pool.length;i++){ const o=pool[i]; if(!canTake(o))continue; const k=[catCount[category(o.m)]||0, i]; if(!best||k[0]<bk[0]||(k[0]===bk[0]&&k[1]<bk[1])){best=o;bk=k;} } return best; };
-    let o; while(picked.length<TARGET_OPTIONS && (o=pickOne())) take(o);
-
-    if(picked.length && !picked.some(x=>isVegan(x.m))){
-      const veg = pool.find(x=>isVegan(x.m) && !(x.m.vg && localVg.has(x.m.vg)));
-      if(veg){ let ri=-1; for(let i=picked.length-1;i>=0;i--){ if(!isVegan(picked[i].m)){ri=i;break;} }
-        if(ri>=0){ const rem=picked[ri]; if(rem.m.vg)localVg.delete(rem.m.vg); picked[ri]=veg; if(veg.m.vg)localVg.add(veg.m.vg); }
-        else if(picked.length<TARGET_OPTIONS) take(veg); }
-    }
-
-    picked.forEach(o=>{ if(o.m.vg) usedVg.add(o.m.vg); usedIds.add(o.m.id); });
-
-    // Display order. Sort the chosen options by density in the plan's direction so
-    // the carousel reads as a gradient (low-to-high for cut/cautious, high-to-low for
-    // hardgainer; balanced keeps fit order). Then, for a non-vegan user, push the one
-    // required vegan option to the back so it never leads. Selection is unchanged.
-    let display = picked.slice().sort((a,b)=>
-      densDir*(a.solved.density-b.solved.density) || fit(a.solved)-fit(b.solved) || (a.m.id<b.m.id?-1:1));
-    if (!restriction.includes('vegan')) {
-      const vi = display.findIndex(x=>isVegan(x.m));
-      if (vi > -1) { const [v] = display.splice(vi,1); display.push(v); }
-    }
-
-    carousels.push({ K, P, options: display.map(o=>({
+      .filter(o => o.solved.feasible)
+      .sort((a,b)=> densDir*(a.solved.density-b.solved.density) || fit(a.solved)-fit(b.solved) || (a.m.id<b.m.id?-1:1));
+    carousels.push({ K, P, options: all.map(o=>({
       id:o.m.id, name:o.m.name, img:'/meals/'+o.m.id+'.jpg', vegan:isVegan(o.m), recipe:needsRecipe(o.m),
       kcal:o.solved.kcal, protein:o.solved.protein, carbs:o.solved.carbs, fat:o.solved.fat, fiber:o.solved.fiber,
       density:o.solved.density, portions:o.solved.portions, steps:STEPS[o.m.id]||[],
@@ -3690,13 +3666,21 @@ const MealCarousel = ({ options }) => {
         ))}
       </div>
       {options.length > 1 && (
-        <div className="flex items-center justify-center gap-1.5 mt-2">
-          {options.map((_, i) => (
-            <button key={i} onClick={() => go(i)} aria-label={`Option ${i + 1}`}
-              style={{ width: i === active ? 18 : 6, height: 6, borderRadius: 9999, transition: 'width .2s' }}
-              className={i === active ? 'bg-stone-800' : 'bg-stone-300'} />
-          ))}
-        </div>
+        options.length > 10
+          ? <div className="flex items-center justify-center gap-3 mt-2">
+              <button onClick={() => go(Math.max(0, active - 1))} disabled={active === 0} aria-label="Previous meal"
+                className="w-7 h-7 flex items-center justify-center rounded-full border border-stone-300 text-stone-500 disabled:opacity-30 hover:bg-stone-100 hover:text-stone-800 transition"><ArrowLeft className="w-3.5 h-3.5" /></button>
+              <span className="text-xs font-medium text-stone-500 tabular-nums select-none">{active + 1} / {options.length}</span>
+              <button onClick={() => go(Math.min(options.length - 1, active + 1))} disabled={active === options.length - 1} aria-label="Next meal"
+                className="w-7 h-7 flex items-center justify-center rounded-full border border-stone-300 text-stone-500 disabled:opacity-30 hover:bg-stone-100 hover:text-stone-800 transition"><ArrowRight className="w-3.5 h-3.5" /></button>
+            </div>
+          : <div className="flex items-center justify-center gap-1.5 mt-2">
+              {options.map((_, i) => (
+                <button key={i} onClick={() => go(i)} aria-label={`Option ${i + 1}`}
+                  style={{ width: i === active ? 18 : 6, height: 6, borderRadius: 9999, transition: 'width .2s' }}
+                  className={i === active ? 'bg-stone-800' : 'bg-stone-300'} />
+              ))}
+            </div>
       )}
     </div>
   );
