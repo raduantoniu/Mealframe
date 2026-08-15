@@ -1912,6 +1912,38 @@ const MEALS = [
     rules:{ 'Tomato-based sauce':{ratioTo:'White pasta (dry)',ratio:1.67,min:100}, 'Olive oil':{min:5,max:20} },
     ings:[['White pasta (dry)',150,19.6,2.3,112,4.8,'P'],['Plant-based veggie balls',150,16.8,15.7,5.4,4.4,'P'],['Tomato-based sauce',400,6.4,8.8,28,8,'P'],['Olive oil',8,0,8,0,0,'F']] },
 
+  // ===== XL meals =====
+  // Scaled-up "double portion" versions for extreme slots (2-meal-a-day and big bulks).
+  // xl:true routes them through xlTune (volume floor relaxed). High bands + high protein
+  // floors keep them out of every normal slot. base:<id> reuses the base image + recipe.
+  { id:'chicken_rice_xl', base:'chicken_rice', name:'Chicken & Veggie Rice (XL)', band:[850,1500], mr:false, vg:null, xl:true,
+    diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:0},
+    rules:{ 'Chicken breast':{min:290}, 'White rice (dry)':{min:50}, 'Frozen veg mix':{min:120,max:280}, 'Oil':{max:14}, 'Soy sauce':{min:10,max:20} },
+    ings:[['Chicken breast',400,80,12.1,0,0,'P'],['White rice (dry)',130,9.3,1,102,1.6,'S'],['Frozen veg mix',250,7.8,1.2,32,10.7,'X'],['Oil',12,0,12,0,0,'F'],['Soy sauce',20,1.6,0.1,0.8,0,'F']] },
+  { id:'salmon_potato_xl', base:'salmon_potato', name:'Salmon & Baked Potatoes (XL)', band:[950,1550], mr:false, vg:null, xl:true,
+    diet:{meat:0,pork:0,fish:1,dairy:0,egg:0,gluten:0},
+    cookFloor:{ of:'Potatoes (raw)', to:'Salmon', ratio:1.2 },
+    rules:{ 'Salmon':{min:270}, 'Oil':{max:15} },
+    ings:[['Salmon',350,73.5,15.4,0,0,'P'],['Potatoes (raw)',500,17.5,1,151,18,'S'],['Oil',12,0,12,0,0,'F']] },
+  { id:'spaghetti_bolognaise_xl', base:'spaghetti_bolognaise', name:'Spaghetti Bolognaise (XL)', band:[1320,1850], mr:false, vg:null, xl:true,
+    diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:1},
+    rules:{ 'Bolognaise sauce (canned)':{ratioTo:'White pasta (dry)',ratio:2.5,min:100}, 'Olive oil':{ratioTo:'White pasta (dry)',ratio:0.09,min:5,max:30} },
+    ings:[['White pasta (dry)',320,41.6,4.8,239,10.2,'S'],['Bolognaise sauce (canned)',800,39.2,24.8,52,0,'P'],['Olive oil',22,0,22,0,0,'F']] },
+  { id:'buttered_rice_eggs_xl', base:'buttered_rice_eggs', name:'Buttered Rice with Fried Eggs (XL)', band:[1080,1650], mr:false, vg:null, xl:true,
+    diet:{meat:0,pork:0,fish:0,dairy:1,egg:1,gluten:0},
+    rules:{ 'Eggs':{min:200,max:350}, 'Butter':{min:15,max:60} },
+    ings:[['White rice',280,20,2.1,220,3.5,'S'],['Eggs',300,36,30,0,0,'P'],['Butter',45,0.45,36,0,0,'F']] },
+  // wave 2: chunky meals made to scale via a continuous filler (fries) + a mayo lever,
+  // exactly as intended — the fries bridge the whole-patty steps so there are no gaps.
+  { id:'burgers_fries_meat_xl', base:'burgers_fries_meat', name:'Burgers & Fries (XL)', band:[1150,1900], mr:false, vg:null, xl:true,
+    diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:1},
+    rules:{ 'Burger patties':{stepBase:true,min:300,max:500}, 'Burger buns':{ratioTo:'Burger patties',ratio:0.6}, 'Mayo':{max:50}, 'Onion slices':{fix:50}, 'Pickles':{fix:50}, 'Mustard':{fix:20}, 'Ketchup':{max:40} },
+    ings:[['Burger patties',400,68,60,8.4,0,'P'],['Frozen potato fries (raw)',350,8.4,15.8,85,9.8,'S'],['Burger buns',240,23.6,9.4,116,4.2,'S'],['Mayo',30,0.3,22.5,0.3,0,'F'],['Onion slices',50,0.6,0.1,3.8,0.9,'X'],['Pickles',50,0.2,0.2,0.7,0.5,'X'],['Mustard',50,1.9,1.6,0.9,2,'F'],['Ketchup',50,0.5,0.1,14,0.1,'F']] },
+  { id:'burgers_fries_plant_xl', base:'burgers_fries_plant', name:'Plant Burgers & Fries (XL)', band:[1150,1900], mr:false, vg:null, plant:true, xl:true,
+    diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:1},
+    rules:{ 'Plant-based burger':{stepBase:true,min:300,max:500}, 'Burger buns':{ratioTo:'Plant-based burger',ratio:0.6}, 'Mayo':{max:50}, 'Onion slices':{fix:50}, 'Pickles':{fix:50}, 'Mustard':{fix:20}, 'Ketchup':{max:40} },
+    ings:[['Plant-based burger',400,68,52,17.6,3.6,'P'],['Frozen potato fries (raw)',350,8.4,15.8,85,9.8,'S'],['Burger buns',240,23.6,9.4,116,4.2,'S'],['Mayo',30,0.3,22.5,0.3,0,'F'],['Onion slices',50,0.6,0.1,3.8,0.9,'X'],['Pickles',50,0.2,0.2,0.7,0.5,'X'],['Mustard',50,1.9,1.6,0.9,2,'F'],['Ketchup',50,0.5,0.1,14,0.1,'F']] },
+
 ];
 
 
@@ -2694,6 +2726,11 @@ function selectCarousels(realMeals, structure, answers){
   // This rescues slots whose target protein is low relative to calories, where lean
   // meals would otherwise overshoot and be rejected. Cut keeps the symmetric default.
   const solveTune = structure.bulkType ? { ...TUNE, PHI: 5 } : TUNE;
+  // XL meals opt out of the volume floor (someone eating 1400 kcal in one sitting has
+  // accepted the volume) and get a little more scale/PD headroom. Applied ONLY to meals
+  // flagged xl:true; every normal meal is still solved with solveTune, so normal plans
+  // are byte-for-byte unaffected. The solver is untouched — it just reads the tune passed in.
+  const xlTune = { ...solveTune, DENS_DIV: 2600, srMin: 0.25, srMax: 3.8, PDLO: 0.6, PDHI: 1.6 };
 
   // DENSITY ORDERING. The library is shared; a meal's place in each carousel is set
   // by its calorie density, not by a bulk/cut tag. Cutters and cautious bulkers see
@@ -2717,13 +2754,13 @@ function selectCarousels(realMeals, structure, answers){
       // no curation, each slot judged independently. Sorted low->high density, then fit.
       const all = MEALS
         .filter(m => eligible(m, restriction))
-        .map(m => ({ m, solved: solveMeal(m, K, P, solveTune) }))
+        .map(m => ({ m, solved: solveMeal(m, K, P, m.xl ? xlTune : solveTune) }))
         .filter(o => o.solved.feasible)
         .sort((a,b)=> (a.solved.density-b.solved.density) || fit(a.solved)-fit(b.solved) || (a.m.id<b.m.id?-1:1));
       carousels.push({ K, P, options: all.map(o=>({
-        id:o.m.id, name:o.m.name, img:'/meals/'+o.m.id+'.jpg', vegan:isVegan(o.m), recipe:needsRecipe(o.m),
+        id:o.m.id, name:o.m.name, img:'/meals/'+(o.m.base||o.m.id)+'.jpg', vegan:isVegan(o.m), recipe:needsRecipe(o.m),
         kcal:o.solved.kcal, protein:o.solved.protein, carbs:o.solved.carbs, fat:o.solved.fat, fiber:o.solved.fiber,
-        density:o.solved.density, portions:o.solved.portions, steps:STEPS[o.m.id]||[],
+        density:o.solved.density, portions:o.solved.portions, steps:STEPS[o.m.base||o.m.id]||[],
       })) });
       return;
     }
@@ -2732,10 +2769,16 @@ function selectCarousels(realMeals, structure, answers){
     // curation cap — the user scrolls through all of them, however many there are.
     // Sorted by density in the plan's direction (low-first for cut/cautious,
     // high-first for hardgainer, neutral for balanced bulk), then fit, then id.
-    const all = MEALS
+    const feasible = MEALS
       .filter(m => eligible(m, restriction) && (!m.mr || allowMR))
-      .map(m => ({ m, solved: solveMeal(m, K, P, solveTune) }))
-      .filter(o => o.solved.feasible)
+      .map(m => ({ m, solved: solveMeal(m, K, P, m.xl ? xlTune : solveTune) }))
+      .filter(o => o.solved.feasible);
+    // An XL never shares a slot with its own base meal: if the base is feasible here,
+    // the normal serving covers it, so the XL is dropped. This confines each XL to exactly
+    // the extreme range its base can't reach — no caps, no band juggling, normals untouched.
+    const feasIds = new Set(feasible.map(o => o.m.id));
+    const all = feasible
+      .filter(o => !(o.m.xl && feasIds.has(o.m.base)))
       .sort((a,b)=> densDir*(a.solved.density-b.solved.density) || fit(a.solved)-fit(b.solved) || (a.m.id<b.m.id?-1:1));
     carousels.push({ K, P, options: all.map(o=>({
       id:o.m.id, name:o.m.name, img:'/meals/'+o.m.id+'.jpg', vegan:isVegan(o.m), recipe:needsRecipe(o.m),
