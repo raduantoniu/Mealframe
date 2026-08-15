@@ -2781,9 +2781,9 @@ function selectCarousels(realMeals, structure, answers){
       .filter(o => !(o.m.xl && feasIds.has(o.m.base)))
       .sort((a,b)=> densDir*(a.solved.density-b.solved.density) || fit(a.solved)-fit(b.solved) || (a.m.id<b.m.id?-1:1));
     carousels.push({ K, P, options: all.map(o=>({
-      id:o.m.id, name:o.m.name, img:'/meals/'+o.m.id+'.jpg', vegan:isVegan(o.m), recipe:needsRecipe(o.m),
+      id:o.m.id, name:o.m.name, img:'/meals/'+(o.m.base||o.m.id)+'.jpg', vegan:isVegan(o.m), recipe:needsRecipe(o.m),
       kcal:o.solved.kcal, protein:o.solved.protein, carbs:o.solved.carbs, fat:o.solved.fat, fiber:o.solved.fiber,
-      density:o.solved.density, portions:o.solved.portions, steps:STEPS[o.m.id]||[],
+      density:o.solved.density, portions:o.solved.portions, steps:STEPS[o.m.base||o.m.id]||[],
     })) });
   });
   return carousels;
