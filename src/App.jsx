@@ -3181,11 +3181,15 @@ function computeMealSchedule(structure, p) {
     // after the session. A FASTED morning is excluded — it keeps its later first
     // meal (wake + 4h) and lets the optional pre-workout shake bridge the session.
     firstMeal = Math.max(wake + FIRST_MEAL_AFTER_WAKE, trainC + POST_WORKOUT_LIGHT_DELAY);
-  } else if (trains && wk === 'midday' && w.morning && trainC > wake && trainC <= firstMeal) {
+  } else if (trains && wk === 'midday' && trainC > wake && trainC <= firstMeal) {
     // Trains BETWEEN two meals, but the session lands on (or before) the possibly
     // delayed first meal, so forward spacing would leave nothing in front of it.
     // Pull the first meal ahead of the session as a genuine pre-workout meal; the
-    // post-workout meal then follows from the normal spacing.
+    // post-workout meal then follows from the normal spacing. The trigger is the
+    // collision (trainC <= firstMeal), not the clock: an IF window can push the
+    // first meal onto a noon session, which is past MORNING_TRAIN_CUTOFF, so a
+    // w.morning gate here would miss exactly this case and strand the meal after
+    // the gym via the collision guard below.
     firstMeal = Math.max(wake + FIRST_MEAL_AFTER_WAKE, trainC - PRE_WORKOUT_MEAL_GAP);
   } else if (w.morning && trainC >= wake && trainC < firstMeal) {
     firstMeal = Math.max(firstMeal, trainC + 45);
