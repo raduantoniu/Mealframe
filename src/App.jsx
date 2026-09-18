@@ -2789,6 +2789,34 @@ function selectCarousels(realMeals, structure, answers){
   return carousels;
 }
 
+// Standalone "build a custom meal" carousel. Given a target (K, P), a dietary
+// restriction array, and a sort direction, return every library meal that solves
+// for those numbers — the same option objects the results page renders. No plan,
+// no questionnaire: symmetric ±5g protein window (PHI 0), meal replacements and XL
+// meals both allowed, ordered by calorie density (sortDir +1 = filling/low-density
+// first, -1 = dense/easy-to-eat first).
+function selectCustomCarousel(K, P, restriction, sortDir = 1) {
+  const restr = (restriction && restriction.length) ? restriction : ['none'];
+  const customTune = { ...TUNE, PHI: 0 };  // symmetric ±5g protein window
+  const xlTune = { ...customTune, DENS_DIV: 2600, srMin: 0.25, srMax: 3.8, PDLO: 0.6, PDHI: 1.6 };
+
+  const feasible = MEALS
+    .filter(m => eligible(m, restr))                 // MRs and XL both allowed here
+    .map(m => ({ m, solved: solveMeal(m, K, P, m.xl ? xlTune : customTune) }))
+    .filter(o => o.solved.feasible);
+
+  const feasIds = new Set(feasible.map(o => o.m.id));
+  const all = feasible
+    .filter(o => !(o.m.xl && feasIds.has(o.m.base)))  // XL only where its base can't reach the slot
+    .sort((a, b) => sortDir * (a.solved.density - b.solved.density) || fit(a.solved) - fit(b.solved) || (a.m.id < b.m.id ? -1 : 1));
+
+  return all.map(o => ({
+    id: o.m.id, name: o.m.name, img: '/meals/' + (o.m.base || o.m.id) + '.jpg', vegan: isVegan(o.m), recipe: needsRecipe(o.m),
+    kcal: o.solved.kcal, protein: o.solved.protein, carbs: o.solved.carbs, fat: o.solved.fat, fiber: o.solved.fiber,
+    density: o.solved.density, portions: o.solved.portions, steps: STEPS[o.m.base || o.m.id] || [],
+  }));
+}
+
 // =====================================================
 // SHARED UI  (mirrors MacroMetric / PhysiquePlan)
 // =====================================================
@@ -2852,7 +2880,7 @@ const QAItem = ({ question, children }) => {
 // SCREENS
 // =====================================================
 
-const LandingScreen = ({ onStart, onDecode, onCustom }) => (
+const LandingScreen = ({ onStart, onDecode, onCustom, onCustomMeal }) => (
   <Card className="max-w-3xl">
     <div className="grid md:grid-cols-2 gap-10 items-center">
       <div>
@@ -2876,7 +2904,10 @@ const LandingScreen = ({ onStart, onDecode, onCustom }) => (
           Load a MealFrame™ ID
         </button>
         <button onClick={onCustom} className="mt-2 w-full bg-stone-50 hover:bg-stone-100 text-stone-900 font-medium py-3.5 px-6 rounded-full transition-colors text-sm border border-stone-200">
-          Build from custom macros
+          Build a meal structure from custom macros
+        </button>
+        <button onClick={onCustomMeal} className="mt-2 w-full bg-stone-50 hover:bg-stone-100 text-stone-900 font-medium py-3.5 px-6 rounded-full transition-colors text-sm border border-stone-200">
+          Build a single meal
         </button>
         <p className="text-xs text-stone-500 text-center mt-3">Takes about 3 minutes.</p>
       </div>
@@ -3925,6 +3956,114 @@ const DecodeIdScreen = ({ onDecoded, onBack }) => {
 };
 
 // =====================================================
+// CUSTOM MEAL  (standalone "build a custom meal" screen)
+// =====================================================
+
+const CUSTOM_DIET_OPTIONS = [
+  ['none', 'No restrictions'],
+  ['vegetarian', 'Vegetarian'],
+  ['vegan', 'Vegan'],
+  ['pescatarian', 'Pescatarian'],
+  ['nomeat', "Don't eat meat"],
+  ['nopork', 'No pork'],
+  ['nodairy', 'No dairy'],
+  ['gluten', 'Gluten-free'],
+];
+
+const CustomMealScreen = ({ onBack }) => {
+  const [calories, setCalories] = useState('');
+  const [protein, setProtein] = useState('');
+  const [diet, setDiet] = useState(['none']);
+  const [sortDir, setSortDir] = useState(1);   // 1 = filling first, -1 = easy-to-eat first
+  const [results, setResults] = useState(null); // null = not generated yet
+
+  const cal = parseInt(calories, 10);
+  const p = parseInt(protein, 10);
+  const valid = !isNaN(cal) && cal > 0 && !isNaN(p) && p >= 0;
+
+  const toggleDiet = (val) => {
+    setResults(null);
+    setDiet((prev) => {
+      if (val === 'none') return ['none'];
+      let next = prev.filter((v) => v !== 'none');
+      next = next.includes(val) ? next.filter((v) => v !== val) : [...next, val];
+      return next.length === 0 ? ['none'] : next;
+    });
+  };
+
+  const run = (dir) => setResults(selectCustomCarousel(cal, p, diet, dir));
+  const generate = () => { if (valid) run(sortDir); };
+  const setSort = (dir) => { setSortDir(dir); if (results && valid) run(dir); };
+
+  const inputCls = 'mt-1 w-full px-3 py-3 rounded-lg border border-stone-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500';
+  const sortPill = (on) => `px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${on ? 'bg-stone-900 text-white' : 'text-stone-600 hover:text-stone-900'}`;
+
+  return (
+    <Card className="max-w-2xl">
+      <BackButton onClick={onBack} />
+      <span className="text-xs font-semibold text-stone-400 tracking-widest uppercase">One meal, on demand</span>
+      <h2 className="mt-2 text-2xl font-bold text-stone-900">Build a custom meal</h2>
+      <p className="text-stone-600 mt-2 text-sm">Enter the calories and protein you want for a single meal. MealFrame lists every meal in the library that fits those numbers, with exact ingredient weights and recipes.</p>
+
+      <div className="mt-5 grid grid-cols-2 gap-3">
+        <div>
+          <label className="text-sm font-medium text-stone-700">Calories</label>
+          <input type="number" inputMode="numeric" min="0" value={calories}
+            onChange={(e) => { setCalories(e.target.value); setResults(null); }} placeholder="600" className={inputCls} />
+        </div>
+        <div>
+          <label className="text-sm font-medium text-stone-700">Protein (g)</label>
+          <input type="number" inputMode="numeric" min="0" value={protein}
+            onChange={(e) => { setProtein(e.target.value); setResults(null); }} placeholder="40" className={inputCls} />
+        </div>
+      </div>
+
+      <div className="mt-4">
+        <label className="text-sm font-medium text-stone-700">Diet</label>
+        <div className="mt-1 flex flex-wrap gap-2">
+          {CUSTOM_DIET_OPTIONS.map(([val, label]) => {
+            const sel = diet.includes(val);
+            return (
+              <button key={val} type="button" onClick={() => toggleDiet(val)}
+                className={`px-3 py-2 rounded-lg border text-sm transition-colors ${sel ? 'border-orange-500 bg-orange-50 text-stone-900 font-medium' : 'border-stone-200 bg-stone-50 text-stone-700 hover:border-orange-300'}`}>
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="mt-4">
+        <label className="text-sm font-medium text-stone-700">Sort meals by</label>
+        <div className="mt-1 ml-3 inline-flex items-center rounded-full border border-stone-300 p-1 bg-stone-50">
+          <button type="button" onClick={() => setSort(1)} className={sortPill(sortDir === 1)}>Low calorie density</button>
+          <button type="button" onClick={() => setSort(-1)} className={sortPill(sortDir === -1)}>High calorie density</button>
+        </div>
+        <p className="text-xs text-stone-500 mt-1.5">Low calorie density means more food for the same calories; high density means smaller, denser meals.</p>
+      </div>
+
+      <PrimaryButton onClick={generate} disabled={!valid} className="mt-5">Generate meals <ArrowRight className="w-4 h-4" /></PrimaryButton>
+
+      {results !== null && (
+        <div className="mt-6">
+          {results.length > 0 ? (
+            <>
+              <h3 className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">{results.length} meal{results.length === 1 ? '' : 's'} fit {cal} kcal · {p}P</h3>
+              <p className="text-xs text-stone-500 mb-3 leading-relaxed">Quantities are raw weights unless noted. Scale them to the brands you use, since macros vary a little by product. Calorie density is calories per gram; lower means more food for the same calories. Swipe for more options.</p>
+              <MealCarousel options={results} />
+            </>
+          ) : (
+            <div className="bg-white border border-stone-200 rounded-xl p-5 text-sm text-stone-600 leading-relaxed">
+              No library meals fit those numbers. Try widening the calories, lowering the protein target, or loosening the diet filter.
+            </div>
+          )}
+        </div>
+      )}
+    </Card>
+  );
+};
+
+// =====================================================
 // MAIN APP
 // =====================================================
 
@@ -4060,7 +4199,10 @@ export default function App() {
       {screen === 'landing' && <LandingScreen
         onStart={() => { setCustomMode(false); setScreen('code'); }}
         onDecode={() => setScreen('decode_id')}
-        onCustom={() => setScreen('custom')} />}
+        onCustom={() => setScreen('custom')}
+        onCustomMeal={() => setScreen('custom_meal')} />}
+
+      {screen === 'custom_meal' && <CustomMealScreen onBack={() => setScreen('landing')} />}
 
       {screen === 'custom' && (
         <CustomMacrosScreen
