@@ -351,8 +351,8 @@ const CUT_QUESTIONS = [
   { id: 'workout', q: 'When do you usually train?',
     options: [
       ['before_first','Before my first meal (fasted or pre-workout shake)'],
-      ['midday','Morning, afternoon, or evening — between two meals'],
-      ['evening','Evening, after my last meal'],
+      ['midday','Between two meals'],
+      ['evening','After my last meal'],
     ] },
   { id: 'hungryPostWorkout', q: 'Do you get really hungry right after training?',
     options: [
@@ -444,8 +444,8 @@ const BULK_QUESTIONS = [
   { id: 'workout', q: 'When do you usually train?',
     options: [
       ['before_first','Before my first meal'],
-      ['midday','Morning, afternoon, or evening — between two meals'],
-      ['evening','Evening, after my last meal'],
+      ['midday','Between two meals'],
+      ['evening','After my last meal'],
     ] },
   { id: 'preworkoutTolerance', q: 'Can you train comfortably soon after eating a big meal?',
     options: [
@@ -1104,7 +1104,7 @@ function decodeAnswers(s) {
   return Object.keys(obj).length ? obj : null;
 }
 
-function buildTemplateId(code, structure, personalization, answers) {
+function buildTemplateId(code, structure, personalization, answers, adjust = null) {
   const dir = code.direction === 'cut' ? 'C' : 'B';
   const tier = code.direction === 'cut' ? structure.backloadTier : structure.loadTier;
   const tierCode = code.direction === 'cut' ? CUT_TIER_CODE[tier] : BULK_TIER_CODE[tier];
@@ -1122,6 +1122,9 @@ function buildTemplateId(code, structure, personalization, answers) {
     (structure.flags.restriction || ['none']).join('.'),
     encodeAnswers(answers),                 // NEW field 13
   ];
+  // Field 14: manual per-meal overrides, appended ONLY when present so an unadjusted
+  // plan's ID is byte-for-byte identical to before this feature (old IDs still valid).
+  if (adjust) suffixFields.push(encodeAdjust(adjust));
   const payload = suffixFields.join('|');
   const enc = base64urlEncode(payload);
   const ck = checksum2(`${prefix}|${payload}`);
@@ -1176,7 +1179,110 @@ function decodeTemplateId(raw) {
   };
   const answers = decodeAnswers(f[13]);                 // NEW: null when field absent/empty
   if (isNaN(code.target) || isNaN(mealCount)) return { ok: false, error: 'fields' };
-  return { ok: true, data: { code, structure, personalization, answers } };
+  const adjust = f[14] ? parseAdjust(f[14]) : null;
+  return { ok: true, data: { code, structure, personalization, answers, adjust } };
+}
+
+// =====================================================
+// PLAN ADJUSTMENTS  (manual coach edits to a generated / reloaded plan)
+// =====================================================
+// A plan can be hand-tuned: per-meal time, calories and protein, plus the workout
+// time. Carbs and fat are DISPLAY-ONLY here (the meal solver targets calories and
+// protein only), so an edit holds the meal's existing fat and lets carbs absorb the
+// remaining calories. The editor keeps the sum of real-meal calories and the sum of
+// real-meal protein fixed, so the day's totals are preserved; the coach only
+// redistributes within them. Overrides ride in the MF1 code as one extra payload
+// field (encodeAdjust) so a reloaded ID restores the tuned plan exactly.
+
+// Given a meal's calories + protein and its prior fat, hold the fat where the calories
+// allow and give the rest to carbs. Whole grams; the entered kcal stays authoritative.
+function deriveFatCarbs(kcal, protein, priorFat) {
+  const remaining = kcal - protein * 4;
+  if (remaining <= 0) return { carbs: 0, fat: 0 };
+  const fat = Math.max(0, Math.min(Math.round(priorFat), Math.floor(remaining / 9)));
+  const carbs = Math.max(0, Math.round((remaining - fat * 9) / 4));
+  return { carbs, fat };
+}
+
+// adjust = { workout: <clock minutes | null>, meals: [{ time, kcal, protein, fat }] }
+// Encoded as  <workout|'x'>*<t.k.p.f>,<t.k.p.f>,...  using only integers and the
+// separators * , .  — none of which can push a '-' into the base64url payload (so the
+// MF1 dash-split decoder stays intact), and none of which collide with the '|' field
+// separator or the ';'/':' used inside the answers field.
+function encodeAdjust(adjust) {
+  if (!adjust || !adjust.meals || !adjust.meals.length) return '';
+  const w = adjust.workout == null ? 'x' : Math.round(adjust.workout);
+  const meals = adjust.meals
+    .map((m) => `${Math.round(m.time)}.${Math.round(m.kcal)}.${Math.round(m.protein)}.${Math.round(m.fat)}`)
+    .join(',');
+  return `${w}*${meals}`;
+}
+
+function parseAdjust(str) {
+  if (!str) return null;
+  const star = str.indexOf('*');
+  if (star < 0) return null;
+  const wRaw = str.slice(0, star);
+  const workout = wRaw === 'x' ? null : parseInt(wRaw, 10);
+  if (workout !== null && isNaN(workout)) return null;
+  const meals = [];
+  for (const seg of str.slice(star + 1).split(',')) {
+    const parts = seg.split('.').map((n) => parseInt(n, 10));
+    if (parts.length !== 4 || parts.some((n) => isNaN(n))) return null;
+    meals.push({ time: parts[0], kcal: parts[1], protein: parts[2], fat: parts[3] });
+  }
+  if (!meals.length) return null;
+  return { workout, meals };
+}
+
+// Apply overrides to a freshly built base plan. Real meals are matched to the override
+// entries in clock-time order (this is the renumber-by-time on save), their calories,
+// protein and time replaced and carbs/fat rederived. The shake, if any, is left as the
+// generator built it and re-placed in the array by its workout-derived time so the
+// meal-by-meal list stays in clock order. personalization.train is moved to the edited
+// workout time so the timeline and the shake anchor follow it. Returns { plan,
+// personalization }, or null when the override doesn't fit (meal-count mismatch), in
+// which case the caller keeps the base plan.
+function buildAdjustedPlan(basePlan, personalization, adjust, dayTarget) {
+  if (!adjust || !adjust.meals) return null;
+  const reals = basePlan.meals.filter((m) => !m.isShake);
+  if (reals.length !== adjust.meals.length) return null;
+
+  const newPers = {
+    ...personalization,
+    train: adjust.workout != null ? adjust.workout : personalization.train,
+  };
+  const wake = newPers.wake;
+  const contOf = (t) => (t < wake ? t + 1440 : t);
+  const clock = (t) => ((t % 1440) + 1440) % 1440;
+
+  const entries = adjust.meals.slice().sort((a, b) => contOf(clock(a.time)) - contOf(clock(b.time)));
+  const newReals = entries.map((e, i) => {
+    const src = reals[i];
+    const { carbs, fat } = deriveFatCarbs(e.kcal, e.protein, e.fat);
+    return {
+      ...src,
+      kcal: e.kcal, protein: e.protein, carbs, fat,
+      time: clock(e.time),
+      pctOfDay: Math.round((e.kcal / (dayTarget || 1)) * 100),
+      isShake: false,
+    };
+  });
+
+  let meals = newReals;
+  const shake = basePlan.meals.find((m) => m.isShake);
+  if (shake) {
+    const trainC = newPers.train > 0 ? contOf(clock(newPers.train)) : 0;
+    let st;
+    if (shake.shakeKind === 'post' && trainC) st = trainC + POST_WORKOUT_LIGHT_DELAY;
+    else if (shake.shakeKind === 'pre' && trainC) st = Math.max(wake + 5, trainC - 15);
+    else st = wake + 30;
+    const idx = newReals.findIndex((m) => contOf(m.time) > st);
+    const at = idx < 0 ? newReals.length : idx;
+    meals = [...newReals.slice(0, at), { ...shake }, ...newReals.slice(at)];
+  }
+
+  return { plan: { ...basePlan, meals, __adjusted: true }, personalization: newPers };
 }
 
 // =====================================================
@@ -3377,6 +3483,16 @@ function buildDayEvents(structure, p, meals, snacksArg) {
   const { wake, trains, trainC, sleepC, lateEvening } = sched;
   let { mealTimes } = sched;
 
+  // Adjusted plan: the coach set explicit clock times, so bypass the auto-scheduler
+  // and use those (converted to continuous minutes relative to wake). All the bulk
+  // re-spacing / anti-workout-window / min-gap logic below is skipped, so the saved
+  // times are honored exactly. trainC and the shake still follow p.train, which the
+  // adjusted plan sets to the edited workout time.
+  const adjustedTimes = realMeals.length > 0 && realMeals.every((m) => typeof m.time === 'number');
+  if (adjustedTimes) {
+    mealTimes = realMeals.map((m) => (m.time < wake ? m.time + 1440 : m.time));
+  }
+
   // BULK-ONLY timeline adjustments (the shared scheduler above is never modified):
   //  (a) even spread — the scheduler tends to bunch the early meals when there's a
   //      later workout, leaving a huge gap. Re-space the MIDDLE meals evenly between
@@ -3387,7 +3503,7 @@ function buildDayEvents(structure, p, meals, snacksArg) {
   //  (c) preLight digestion gap — if he doesn't want to train on a full stomach,
   //      keep any pre-workout meal at least 90 min before the session.
   //  (d) keep every meal out of the workout window, then re-sort and space.
-  if (structure.bulkType && mealTimes.length >= 3) {
+  if (!adjustedTimes && structure.bulkType && mealTimes.length >= 3) {
     const fl = structure.flags || {};
     const isIf = structure.morningMode === 'if' || structure.morningMode === 'fasted';
     const w = trains ? classifyWorkout(p.wake, p.sleep, p.train, true) : null;
@@ -3510,7 +3626,7 @@ const SnackIcon = ({ className }) => (
 // stone, white icon) so it stands out. Geometry is inline-styled (not Tailwind
 // arbitrary classes) so it renders the same regardless of the Tailwind build.
 // Same props; reads buildDayEvents() unchanged.
-const TimelinePreview = ({ structure, personalization, meals, snacks }) => {
+const TimelinePreview = ({ structure, personalization, meals, snacks, onAdjust, adjusted }) => {
   const events = buildDayEvents(structure, personalization, meals, snacks);
   if (!events.length) return null;
 
@@ -3579,7 +3695,18 @@ const TimelinePreview = ({ structure, personalization, meals, snacks }) => {
 
   return (
     <div className="bg-stone-50 border border-stone-200 rounded-xl p-4 sm:p-5">
-      <div className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-3 flex items-center gap-2"><Clock className="w-3.5 h-3.5" /> Your day</div>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <div className="text-xs font-semibold text-stone-500 uppercase tracking-wider flex items-center gap-2">
+          <Clock className="w-3.5 h-3.5" /> Your day
+          {adjusted && <span className="text-orange-600 normal-case tracking-normal font-medium">· adjusted</span>}
+        </div>
+        {onAdjust && (
+          <button onClick={onAdjust}
+            className="text-xs font-medium text-stone-600 hover:text-stone-900 border border-stone-300 rounded-full px-3 py-1 transition-colors">
+            Adjust
+          </button>
+        )}
+      </div>
       <div>
         {rows.map((row, ri) => {
           const band = segOf(ri);
@@ -3764,16 +3891,140 @@ const MealCarousel = ({ options }) => {
   );
 };
 
+// Manual plan editor, shown in place of the timeline while adjusting. Edits each
+// real meal's time / calories / protein and the workout time. The sums of real-meal
+// calories and protein are held to the day's totals (preserved from the plan), so the
+// coach only redistributes within them; carbs and fat are derived for display. Meals
+// renumber by time on save (handled in buildAdjustedPlan).
+const PlanEditor = ({ structure, personalization, plan, dayTarget, onCancel, onSave }) => {
+  const evs = buildDayEvents(structure, personalization, plan.meals, plan.snacks);
+  const mealEvents = evs.filter((e) => e.icon === 'meal');
+  const trainEvent = evs.find((e) => e.icon === 'train');
+  const reals = plan.meals.filter((m) => !m.isShake);
+  const hasWorkout = !!trainEvent;
+
+  const [rows, setRows] = useState(reals.map((m, i) => ({
+    time: minutesToHHMM(mealEvents[i] ? mealEvents[i].t : 12 * 60),
+    kcal: String(m.kcal), protein: String(m.protein), fat: m.fat,
+  })));
+  const [wo, setWo] = useState(trainEvent ? minutesToHHMM(trainEvent.t) : '18:00');
+
+  const targetKcal = reals.reduce((s, m) => s + m.kcal, 0);
+  const targetProtein = reals.reduce((s, m) => s + m.protein, 0);
+
+  const num = (s) => { const n = parseInt(s, 10); return isNaN(n) ? 0 : n; };
+  const sumK = rows.reduce((s, r) => s + num(r.kcal), 0);
+  const sumP = rows.reduce((s, r) => s + num(r.protein), 0);
+  const remK = targetKcal - sumK;
+  const remP = targetProtein - sumP;
+
+  const setRow = (i, key, val) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, [key]: val } : r)));
+
+  const rowValid = (r) => {
+    const k = num(r.kcal), p = num(r.protein);
+    return hhmmToMinutes(r.time) != null && k > 0 && p >= 0 && k - p * 4 >= 0;
+  };
+  const allValid = rows.every(rowValid) && (!hasWorkout || hhmmToMinutes(wo) != null);
+  const canSave = allValid && remK === 0 && remP === 0;
+
+  const save = () => {
+    if (!canSave) return;
+    const meals = rows.map((r) => {
+      const kcal = num(r.kcal), protein = num(r.protein);
+      const { fat } = deriveFatCarbs(kcal, protein, r.fat);
+      return { time: hhmmToMinutes(r.time), kcal, protein, fat };
+    });
+    onSave({ workout: hasWorkout ? hhmmToMinutes(wo) : null, meals });
+  };
+
+  const inputCls = 'px-2 py-1.5 rounded-lg border border-stone-200 bg-white text-sm text-center tabular-nums focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500';
+  const remLabel = (v) => (v === 0 ? 'balanced' : v > 0 ? `${v} to add` : `${-v} over`);
+
+  return (
+    <div className="bg-stone-50 border border-stone-200 rounded-xl p-4 sm:p-5">
+      <div className="text-xs font-semibold text-stone-500 uppercase tracking-wider flex items-center gap-2 mb-1"><Clock className="w-3.5 h-3.5" /> Adjust your day</div>
+      <p className="text-xs text-stone-500 mb-4 leading-relaxed">Set the time, calories and protein for each meal, plus the workout time. Meal calories and protein have to add back up to the day's totals shown below. Carbs and fat are filled in for you. Meals renumber by time when you save, and the meal examples refresh to the new numbers.</p>
+
+      {hasWorkout && (
+        <div className="flex items-center gap-3 mb-3 pb-3 border-b border-stone-200">
+          <div className="flex items-center gap-2 text-sm font-medium text-stone-900 flex-1"><Dumbbell className="w-4 h-4 text-stone-500" /> Workout</div>
+          <input type="text" inputMode="numeric" maxLength={5} placeholder="20:00" spellCheck={false}
+            value={wo} onChange={(e) => setWo(e.target.value)}
+            className={`${inputCls} w-[100px] ${hhmmToMinutes(wo) == null ? 'border-red-400' : ''}`} />
+        </div>
+      )}
+
+      <div className="grid gap-x-2 gap-y-1.5 items-center" style={{ gridTemplateColumns: '1fr 100px 72px 64px' }}>
+        <div className="text-[10px] font-semibold text-stone-400 uppercase tracking-wide">Meal</div>
+        <div className="text-[10px] font-semibold text-stone-400 uppercase tracking-wide text-center">Time</div>
+        <div className="text-[10px] font-semibold text-stone-400 uppercase tracking-wide text-center">Kcal</div>
+        <div className="text-[10px] font-semibold text-stone-400 uppercase tracking-wide text-center">Protein</div>
+        {rows.map((r, i) => {
+          const k = num(r.kcal), p = num(r.protein);
+          const { carbs, fat } = deriveFatCarbs(k, p, r.fat);
+          const over = k - p * 4 < 0;
+          return (
+            <React.Fragment key={i}>
+              <div className="text-sm text-stone-700">
+                Meal {i + 1}
+                <span className="block text-xs text-stone-400">{over ? 'protein exceeds calories' : `${p}P · ${carbs}C · ${fat}F`}</span>
+              </div>
+              <input type="text" inputMode="numeric" maxLength={5} placeholder="14:30" spellCheck={false}
+                value={r.time} onChange={(e) => setRow(i, 'time', e.target.value)}
+                className={`${inputCls} ${hhmmToMinutes(r.time) == null ? 'border-red-400' : ''}`} />
+              <input type="number" inputMode="numeric" min="0" value={r.kcal} onChange={(e) => setRow(i, 'kcal', e.target.value)} className={`${inputCls} ${over ? 'border-red-400' : ''}`} />
+              <input type="number" inputMode="numeric" min="0" value={r.protein} onChange={(e) => setRow(i, 'protein', e.target.value)} className={inputCls} />
+            </React.Fragment>
+          );
+        })}
+      </div>
+
+      <div className="mt-4 pt-3 border-t border-stone-200 flex flex-wrap gap-x-6 gap-y-1 text-sm">
+        <div className="text-stone-600">Calories: <span className="font-semibold text-stone-900 tabular-nums">{sumK}</span> / {targetKcal} <span className={`font-medium ${remK === 0 ? 'text-emerald-600' : 'text-orange-600'}`}>({remLabel(remK)})</span></div>
+        <div className="text-stone-600">Protein: <span className="font-semibold text-stone-900 tabular-nums">{sumP}</span> / {targetProtein} <span className={`font-medium ${remP === 0 ? 'text-emerald-600' : 'text-orange-600'}`}>({remLabel(remP)})</span></div>
+      </div>
+
+      <div className="mt-4 flex items-center gap-2">
+        <button onClick={save} disabled={!canSave}
+          className={`text-sm font-medium py-2 px-5 rounded-full transition-colors ${canSave ? 'bg-stone-900 text-white hover:bg-stone-800' : 'bg-stone-200 text-stone-400 cursor-not-allowed'}`}>
+          Save changes
+        </button>
+        <button onClick={onCancel} className="text-sm font-medium text-stone-600 hover:text-stone-900 py-2 px-4">Cancel</button>
+      </div>
+      {allValid && !canSave && (
+        <p className="text-xs text-stone-500 mt-2">Balance calories and protein to the day's totals to save.</p>
+      )}
+    </div>
+  );
+};
+
 const ResultsScreen = ({ code, structure, personalization, plan, templateId, alternative, decodedMode, answers, onRestart, onBack }) => {
   const [copied, setCopied] = useState(false);
   const [showAlt, setShowAlt] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [adjustState, setAdjustState] = useState(null); // { structure, plan, personalization, templateId } | null
   const isCut = code.direction === 'cut';
 
-  // Active view: primary, or the alternative when the lifter toggles to it.
-  const active = (showAlt && alternative) ? alternative : { structure, plan, templateId };
+  // Active view: a saved manual adjustment wins; otherwise the primary, or the
+  // alternative when the lifter toggles to it.
+  const adjusted = !!adjustState;
+  const active = adjusted ? adjustState : ((showAlt && alternative) ? alternative : { structure, plan, templateId });
   const aStructure = active.structure;
   const aPlan = active.plan;
   const aTemplateId = active.templateId;
+  const aPers = adjusted ? adjustState.personalization : personalization;
+  // Adjusted view = a fresh in-session edit, OR a reloaded ID that already carries
+  // overrides (its plan is flagged, even before any new edit this session).
+  const isAdjustedView = adjusted || !!(aPlan && aPlan.__adjusted);
+
+  const applyAdjust = (adjust) => {
+    setEditing(false);
+    const built = buildAdjustedPlan(aPlan, aPers, adjust, code.target);
+    if (!built) return;
+    const id = buildTemplateId(code, aStructure, built.personalization, answers, adjust);
+    setAdjustState({ structure: aStructure, plan: built.plan, personalization: built.personalization, templateId: id });
+    setShowAlt(false);
+  };
 
   const tier = isCut ? aStructure.backloadTier : aStructure.loadTier;
   const tierLabel = { light: 'Balanced', moderate: 'Moderate backload', heavy: 'Heavy backload', low: 'Low load', mid: 'Moderate load', high: 'High load' }[tier];
@@ -3794,7 +4045,7 @@ const ResultsScreen = ({ code, structure, personalization, plan, templateId, alt
       <h2 className="mt-2 text-3xl font-bold text-stone-900">{aStructure.mealCount} meals · {isCut ? 'cutting' : 'bulking'}</h2>
       <p className="text-stone-600 mt-2 text-sm">{morningLabel} · {tierLabel} · {code.target} kcal/day</p>
 
-      {alternative && !decodedMode && (
+      {alternative && !decodedMode && !isAdjustedView && !editing && (
         <div className="mt-4">
           <div className="inline-flex items-center rounded-full border border-stone-300 p-1 bg-stone-50">
             <button onClick={() => setShowAlt(false)} className={pill(!showAlt)}>{alternative.primaryLabel}{isCut && <span className="opacity-60"> · recommended</span>}</button>
@@ -3810,7 +4061,13 @@ const ResultsScreen = ({ code, structure, personalization, plan, templateId, alt
         </p>
       )}
 
-      <div className="mt-5"><TimelinePreview structure={aStructure} personalization={personalization} meals={aPlan.meals} snacks={aPlan.snacks} /></div>
+      <div className="mt-5">
+        {editing
+          ? <PlanEditor structure={aStructure} personalization={aPers} plan={aPlan} dayTarget={code.target}
+              onCancel={() => setEditing(false)} onSave={applyAdjust} />
+          : <TimelinePreview structure={aStructure} personalization={aPers} meals={aPlan.meals} snacks={aPlan.snacks}
+              onAdjust={() => setEditing(true)} adjusted={isAdjustedView} />}
+      </div>
 
       {aStructure.notes && aStructure.notes.length > 0 && (
         <div className="mt-5 bg-stone-50 border border-stone-200 rounded-xl p-5">
@@ -4174,16 +4431,24 @@ export default function App() {
     const fullAnswers = decoded
       ? { ...decoded, restriction: struct2.flags?.restriction || ['none'] }
       : null;
-    setCode(data.code);
-    setStructure(struct2);
-    setPersonalization(p);
-    setAnswers(fullAnswers || {});
-    setAlternative(null);
-    setPlan(buildMealPlan(data.code, struct2, {
+    const basePlan = buildMealPlan(data.code, struct2, {
       trains: p.train > 0,
       wake: p.wake, sleep: p.sleep, train: p.train,
-    }));
-    setTemplateId(buildTemplateId(data.code, struct2, p, fullAnswers));
+    });
+    // If the ID carries manual overrides, rebuild the adjusted plan (and move the
+    // workout to its saved time). A mismatch falls back to the base plan.
+    let finalPlan = basePlan, finalPers = p;
+    if (data.adjust) {
+      const built = buildAdjustedPlan(basePlan, p, data.adjust, data.code.target);
+      if (built) { finalPlan = built.plan; finalPers = built.personalization; }
+    }
+    setCode(data.code);
+    setStructure(struct2);
+    setPersonalization(finalPers);
+    setAnswers(fullAnswers || {});
+    setAlternative(null);
+    setPlan(finalPlan);
+    setTemplateId(buildTemplateId(data.code, struct2, finalPers, fullAnswers, data.adjust || null));
     setDecodedMode(true);
     setScreen('results');
   };
