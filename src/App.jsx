@@ -2938,13 +2938,13 @@ const Logo = ({ size = 32 }) => (
 );
 const Header = () => (
   <header className="w-full px-6 py-4 flex items-center justify-between border-b border-stone-200 bg-white">
-    <div className="flex items-center gap-2.5"><Logo size={32} /><span className="font-semibold text-stone-900 tracking-tight">ShredSmart™</span></div>
-    <span className="text-xs text-stone-500 tracking-wider">MealFrame™</span>
+    <div className="flex items-center gap-2.5"><Logo size={32} /><span className="font-semibold text-stone-900 tracking-tight">ShredSmart</span></div>
+    <span className="text-xs text-stone-500 tracking-wider">MealFrame</span>
   </header>
 );
 const Footer = () => (
   <footer className="w-full px-6 py-4 border-t border-stone-200 bg-white text-xs text-stone-500 flex justify-between">
-    <span>ShredSmart™</span><span>by Radu Antoniu</span>
+    <span>ShredSmart</span><span>by Radu Antoniu</span>
   </footer>
 );
 const Card = ({ children, className = '' }) => (
@@ -2990,12 +2990,12 @@ const LandingScreen = ({ onStart, onDecode, onCustom, onCustomMeal }) => (
   <Card className="max-w-3xl">
     <div className="grid md:grid-cols-2 gap-10 items-center">
       <div>
-        <span className="text-xs font-semibold text-orange-600 tracking-widest">MealFrame™</span>
+        <span className="text-xs font-semibold text-orange-600 tracking-widest">MealFrame</span>
         <h1 className="mt-3 text-4xl md:text-5xl font-bold text-stone-900 tracking-tight leading-tight">
           Turn your macros into a <em className="italic font-semibold text-orange-600">meal structure</em>.
         </h1>
         <p className="mt-4 text-stone-600 leading-relaxed">
-          You've got your numbers from MacroMetric™. Now MealFrame builds the day around them — how many meals, when, and how to split your food so hitting your targets is as easy as possible.
+          You've got your numbers from MacroMetric. Now MealFrame builds the day around them — how many meals, when, and how to split your food so hitting your targets is as easy as possible.
         </p>
       </div>
       <div className="bg-stone-50 border border-stone-200 rounded-xl p-6">
@@ -3007,7 +3007,7 @@ const LandingScreen = ({ onStart, onDecode, onCustom, onCustomMeal }) => (
         </ul>
         <div className="mt-5"><PrimaryButton onClick={onStart}>Continue from MacroMetric <ArrowRight className="w-4 h-4" /></PrimaryButton></div>
         <button onClick={onDecode} className="mt-2 w-full bg-stone-50 hover:bg-stone-100 text-stone-900 font-medium py-3.5 px-6 rounded-full transition-colors text-sm border border-stone-200">
-          Load a MealFrame™ ID
+          Load a MealFrame ID
         </button>
         <button onClick={onCustom} className="mt-2 w-full bg-stone-50 hover:bg-stone-100 text-stone-900 font-medium py-3.5 px-6 rounded-full transition-colors text-sm border border-stone-200">
           Build a meal structure from custom macros
@@ -3022,13 +3022,13 @@ const LandingScreen = ({ onStart, onDecode, onCustom, onCustomMeal }) => (
 );
 
 const MM_CODE_ERROR_COPY = {
-  version: 'This code is from a newer version of MacroMetric™. Re-run MacroMetric to get a compatible code.',
-  wrongcode: 'That looks like a PhysiquePlan™ code (SS1). Paste your MacroMetric™ code (starts with “MM1-”).',
-  checksum: 'That code doesn\'t look right — a character may be off. Copy it again from MacroMetric™, or use the “Continue to MealFrame™” button there.',
-  corrupt: 'That code couldn\'t be read. Copy it again from MacroMetric™.',
-  format: 'That doesn\'t look like a MacroMetric™ code. It should start with “MM1-”.',
-  fields: 'That code is incomplete or from an older version of MacroMetric™. Re-run your MacroMetric plan to get a current code.',
-  empty: 'Paste your MacroMetric™ code to continue.',
+  version: 'This code is from a newer version of MacroMetric. Re-run MacroMetric to get a compatible code.',
+  wrongcode: 'That looks like a PhysiquePlan code (SS1). Paste your MacroMetric code (starts with “MM1-”).',
+  checksum: 'That code doesn\'t look right — a character may be off. Copy it again from MacroMetric, or use the “Continue to MealFrame” button there.',
+  corrupt: 'That code couldn\'t be read. Copy it again from MacroMetric.',
+  format: 'That doesn\'t look like a MacroMetric code. It should start with “MM1-”.',
+  fields: 'That code is incomplete or from an older version of MacroMetric. Re-run your MacroMetric plan to get a current code.',
+  empty: 'Paste your MacroMetric code to continue.',
 };
 
 const CodeScreen = ({ initialCode = '', initialError = null, onDecoded, onBack }) => {
@@ -3043,7 +3043,7 @@ const CodeScreen = ({ initialCode = '', initialError = null, onDecoded, onBack }
     <Card>
       <BackButton onClick={onBack} />
       <span className="text-xs font-semibold text-stone-400 tracking-widest uppercase">Bring your targets over</span>
-      <h2 className="mt-2 text-2xl font-bold text-stone-900">Paste your MacroMetric™ code</h2>
+      <h2 className="mt-2 text-2xl font-bold text-stone-900">Paste your MacroMetric code</h2>
       <p className="text-stone-600 mt-2 text-sm">MacroMetric generated a code with your calories and macros. Paste it here and MealFrame builds your structure around it — no re-entering numbers.</p>
       <div className="mt-5">
         <label className="text-sm font-medium text-stone-700">Your code</label>
@@ -3054,7 +3054,7 @@ const CodeScreen = ({ initialCode = '', initialError = null, onDecoded, onBack }
       <PrimaryButton onClick={submit} disabled={!code.trim()} className="mt-5">Load my targets <ArrowRight className="w-4 h-4" /></PrimaryButton>
       <a href={MACROMETRIC_URL} target="_blank" rel="noopener noreferrer"
         className="mt-2 w-full bg-stone-100 hover:bg-stone-200 text-stone-900 font-medium py-3.5 px-6 rounded-full transition-colors text-center flex items-center justify-center gap-2 text-sm">
-        I don't have a code — do MacroMetric™ first <ExternalLink className="w-4 h-4" />
+        I don't have a code — do MacroMetric first <ExternalLink className="w-4 h-4" />
       </a>
     </Card>
   );
@@ -3120,7 +3120,7 @@ const CustomMacrosScreen = ({ onBuild, onBack }) => {
       <BackButton onClick={onBack} />
       <span className="text-xs font-semibold text-stone-400 tracking-widest uppercase">Your own numbers</span>
       <h2 className="mt-2 text-2xl font-bold text-stone-900">Build from custom macros</h2>
-      <p className="text-stone-600 mt-2 text-sm">Already know your targets? Enter them here and MealFrame builds your structure around them, no MacroMetric™ code needed.</p>
+      <p className="text-stone-600 mt-2 text-sm">Already know your targets? Enter them here and MealFrame builds your structure around them, no MacroMetric code needed.</p>
 
       <div className="mt-5">
         <label className="text-sm font-medium text-stone-700">Goal</label>
@@ -4057,7 +4057,7 @@ const ResultsScreen = ({ code, structure, personalization, plan, templateId, alt
 
       {decodedMode && (
         <p className="text-xs text-stone-500 bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 mt-3">
-          Loaded from a MealFrame™ ID. The structure and macros are exact; clock times shown are from the ID. (Body-composition fine-tuning of density only applies on a fresh run.)
+          Loaded from a MealFrame ID. The structure and macros are exact; clock times shown are from the ID. (Body-composition fine-tuning of density only applies on a fresh run.)
         </p>
       )}
 
@@ -4162,7 +4162,7 @@ const ResultsScreen = ({ code, structure, personalization, plan, templateId, alt
 
       <div className="border-t border-stone-200 my-6"></div>
       <div className="bg-stone-900 rounded-xl p-5 text-center">
-        <h4 className="text-xs font-semibold text-orange-400 uppercase tracking-wider">Your MealFrame™ ID</h4>
+        <h4 className="text-xs font-semibold text-orange-400 uppercase tracking-wider">Your MealFrame ID</h4>
         <p className="text-stone-400 text-xs mt-1">This is your structure. Paste it back into MealFrame anytime to see this page again, and give it to your coach to set up your plan in the ShredSmart app.</p>
         <div className="mt-3 bg-stone-800 border border-stone-700 rounded-lg px-3 py-3"><code className="text-orange-300 text-xs break-all leading-relaxed">{aTemplateId}</code></div>
         <button onClick={copyId} className="mt-3 inline-flex items-center gap-2 bg-white text-stone-900 text-sm font-medium py-2 px-4 rounded-full hover:bg-stone-100 transition-colors"><Copy className="w-4 h-4" /> {copied ? 'Copied!' : 'Copy ID'}</button>
@@ -4171,8 +4171,8 @@ const ResultsScreen = ({ code, structure, personalization, plan, templateId, alt
       {!decodedMode && (
         <div className="text-center mt-6">
           <h3 className="text-xl font-bold text-stone-900">What's next?</h3>
-          <p className="text-stone-600 mt-2 text-sm leading-relaxed">Continue to <strong>OptiWorkout™</strong> to get the training program that pairs with your plan.</p>
-          <div className="mt-5"><PrimaryButton onClick={goToOptiWorkout}>Continue to OptiWorkout™ <ArrowRight className="w-4 h-4" /></PrimaryButton></div>
+          <p className="text-stone-600 mt-2 text-sm leading-relaxed">Continue to <strong>OptiWorkout</strong> to get the training program that pairs with your plan.</p>
+          <div className="mt-5"><PrimaryButton onClick={goToOptiWorkout}>Continue to OptiWorkout <ArrowRight className="w-4 h-4" /></PrimaryButton></div>
         </div>
       )}
       <button onClick={onRestart} className="block mx-auto text-xs text-stone-500 hover:text-stone-700 mt-4 underline underline-offset-2">Start over</button>
@@ -4181,9 +4181,9 @@ const ResultsScreen = ({ code, structure, personalization, plan, templateId, alt
 };
 
 const ID_ERROR_COPY = {
-  empty: 'Paste your MealFrame™ ID to continue.',
-  format: 'That doesn\'t look like a MealFrame™ ID. It should start with “MF1-”.',
-  wrongcode: 'That\'s a PhysiquePlan™ or MacroMetric™ code, not a MealFrame™ ID. To build a structure, use “Continue from MacroMetric” on the home screen.',
+  empty: 'Paste your MealFrame ID to continue.',
+  format: 'That doesn\'t look like a MealFrame ID. It should start with “MF1-”.',
+  wrongcode: 'That\'s a PhysiquePlan or MacroMetric code, not a MealFrame ID. To build a structure, use “Continue from MacroMetric” on the home screen.',
   corrupt: 'That ID couldn\'t be read. Copy it again.',
   checksum: 'That ID doesn\'t look right — a character may be off. Copy it again.',
   fields: 'That ID is incomplete. Copy the full ID.',
@@ -4200,7 +4200,7 @@ const DecodeIdScreen = ({ onDecoded, onBack }) => {
     <Card>
       <BackButton onClick={onBack} />
       <span className="text-xs font-semibold text-stone-400 tracking-widest uppercase">Reload a structure</span>
-      <h2 className="mt-2 text-2xl font-bold text-stone-900">Paste your MealFrame™ ID</h2>
+      <h2 className="mt-2 text-2xl font-bold text-stone-900">Paste your MealFrame ID</h2>
       <p className="text-stone-600 mt-2 text-sm">Have an ID from a previous run (or a client's)? Paste it to regenerate the full structure, timeline, and meal targets — no questionnaire needed.</p>
       <div className="mt-5">
         <input type="text" value={id} onChange={(e)=>{setId(e.target.value); if(error)setError(null);}} placeholder="MF1-…" spellCheck={false} autoCapitalize="off" autoCorrect="off"
