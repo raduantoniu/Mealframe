@@ -3005,7 +3005,7 @@ const LandingScreen = ({ onStart, onDecode, onCustom, onCustomMeal }) => (
             <li key={i} className="flex gap-2"><Check className="w-4 h-4 text-orange-500 flex-shrink-0 mt-0.5" /><span>{t}</span></li>
           ))}
         </ul>
-        <div className="mt-5"><PrimaryButton onClick={onStart}>Build my meal structure <ArrowRight className="w-4 h-4" /></PrimaryButton></div>
+        <div className="mt-5"><PrimaryButton onClick={onStart}>Continue from MacroMetric <ArrowRight className="w-4 h-4" /></PrimaryButton></div>
         <button onClick={onDecode} className="mt-2 w-full bg-stone-50 hover:bg-stone-100 text-stone-900 font-medium py-3.5 px-6 rounded-full transition-colors text-sm border border-stone-200">
           Load a MealFrame™ ID
         </button>
@@ -4183,7 +4183,7 @@ const ResultsScreen = ({ code, structure, personalization, plan, templateId, alt
 const ID_ERROR_COPY = {
   empty: 'Paste your MealFrame™ ID to continue.',
   format: 'That doesn\'t look like a MealFrame™ ID. It should start with “MF1-”.',
-  wrongcode: 'That\'s a PhysiquePlan™ or MacroMetric™ code, not a MealFrame™ ID. To build a structure, use “Build my meal structure” on the home screen.',
+  wrongcode: 'That\'s a PhysiquePlan™ or MacroMetric™ code, not a MealFrame™ ID. To build a structure, use “Continue from MacroMetric” on the home screen.',
   corrupt: 'That ID couldn\'t be read. Copy it again.',
   checksum: 'That ID doesn\'t look right — a character may be off. Copy it again.',
   fields: 'That ID is incomplete. Copy the full ID.',
