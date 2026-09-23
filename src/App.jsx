@@ -2948,7 +2948,7 @@ const Footer = () => (
   </footer>
 );
 const Card = ({ children, className = '' }) => (
-  <div className={`bg-white border border-stone-200 rounded-2xl shadow-sm p-8 max-w-xl w-full ${className}`}>{children}</div>
+  <div className={`bg-white border border-stone-200 rounded-2xl shadow-sm p-8 w-full ${className}`}>{children}</div>
 );
 const PrimaryButton = ({ onClick, children, disabled = false, className = '' }) => (
   <button onClick={onClick} disabled={disabled}
@@ -2987,7 +2987,7 @@ const QAItem = ({ question, children }) => {
 // =====================================================
 
 const LandingScreen = ({ onStart, onDecode, onCustom, onCustomMeal }) => (
-  <Card className="max-w-4xl">
+  <Card className="max-w-3xl">
     <div className="grid md:grid-cols-2 gap-10 items-center">
       <div>
         <span className="text-xs font-semibold text-orange-600 tracking-widest">MealFrame</span>
