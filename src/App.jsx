@@ -2948,7 +2948,7 @@ const Footer = () => (
   </footer>
 );
 const Card = ({ children, className = '' }) => (
-  <div className={`bg-white border border-stone-200 rounded-2xl shadow-sm p-8 w-full ${className}`}>{children}</div>
+  <div className={`bg-white border border-stone-200 rounded-2xl shadow-sm p-8 max-w-xl w-full ${className}`}>{children}</div>
 );
 const PrimaryButton = ({ onClick, children, disabled = false, className = '' }) => (
   <button onClick={onClick} disabled={disabled}
