@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { ArrowRight, ArrowLeft, Check, Loader2, ChevronDown, ChevronUp, ExternalLink, AlertTriangle, Copy, Clock, Dumbbell, Moon, Coffee, UtensilsCrossed, AlarmClock } from 'lucide-react';
 
 // =====================================================
@@ -3862,119 +3862,207 @@ const MealCard = ({ o, open: openProp, onToggle }) => {
   );
 };
 
-// Horizontal meal carousel. Two behaviours worth knowing about:
+// Horizontal meal carousel. Three behaviours worth knowing about:
 //
 // 1. SHARED RECIPE STATE. "See recipe" is owned by the carousel, not the card, so
 //    opening it opens it for every option in that slot. Swiping no longer drops you
 //    back to the collapsed view, and the card you land on has the same shape as the
 //    one you left.
 //
-// 2. PER-MEAL HEIGHT. Slides are top-aligned (no flex stretch) and the scroller's
+// 2. ONE MEAL PER SWIPE, ALWAYS. This does NOT use native scrolling or CSS
+//    scroll-snap. Native snap on iOS lets momentum carry a hard flick across several
+//    slides, and it can be interrupted mid-flight (any layout write during the
+//    gesture does it) and left parked between two cards. Instead the track is a
+//    transform the component drives itself: a drag moves it with the finger, and on
+//    release it settles to exactly one card forward, one back, or where it started.
+//    Distance OR a quick flick commits the move; speed never buys more than one
+//    card, and there is no resting position other than a card boundary.
+//
+// 3. PER-MEAL HEIGHT. Slides are top-aligned (no flex stretch) and the viewport's
 //    height is written explicitly, so a two-ingredient meal no longer inherits the
 //    box of the tallest card in the slot — which on mobile could leave more dead
-//    space than a screenful.
-//    The height is INTERPOLATED against scroll position rather than switched at the
-//    snap point: at rest it is exactly the active card's height, and mid-swipe it
-//    eases between the two cards either side of the finger. So the box grows and
-//    shrinks with the drag instead of jumping when the snap lands. The trade-off is
-//    that a taller incoming card is clipped at the bottom while you drag and reveals
-//    itself as the swipe completes — which reads as the card growing, not as a
-//    glitch, and is gone the moment you let go.
-//    Height is written straight to the DOM (not through state) so scrolling never
-//    triggers a React render, and the CSS transition is enabled only for the recipe
-//    toggle, where the change isn't driven by the finger.
+//    space than a screenful. Height is interpolated against the track position, so
+//    at rest it is exactly the active card's height and mid-drag it eases between
+//    the two cards either side of the finger: the box grows and shrinks with the
+//    swipe rather than jumping when it lands.
+//
+// Transform and height are written straight to the DOM during a drag, so dragging
+// never triggers a React render.
+const SWIPE_MIN_RATIO = 0.18;   // drag this fraction of the card width to commit
+const SWIPE_MIN_PX = 48;        // ...or this many px, whichever is smaller
+const SWIPE_FLICK_V = 0.35;     // px/ms — a quick flick commits regardless of distance
+const SWIPE_EASE = 'cubic-bezier(.22,.61,.36,1)';
+
 const MealCarousel = ({ options }) => {
-  const [active, setActive] = useState(0);
+  const [index, setIndex] = useState(0);
   const [recipeOpen, setRecipeOpen] = useState(false);
-  const ref = useRef(null);
+  const viewport = useRef(null);
+  const track = useRef(null);
   const slides = useRef([]);
   const heights = useRef([]);
-  const lastH = useRef(null);
-  const animNext = useRef(false);   // true for the one measurement after a recipe toggle
+  const indexRef = useRef(0);
+  const animNext = useRef(false);     // animate the one layout pass after a recipe toggle
+  const dragged = useRef(false);      // suppress the click that ends a real drag
+  const drag = useRef({ tracking: false, axis: null, x0: 0, y0: 0, dx: 0, w: 1, t0: 0 });
 
   const n = options ? options.length : 0;
   slides.current.length = n;
+  indexRef.current = index;
   const ids = options ? options.map((o) => o.id).join('|') : '';
 
-  // Set the scroller height for the CURRENT scroll position, blending the two
-  // neighbouring cards so the box tracks the drag continuously.
-  const applyHeight = (animated) => {
-    const el = ref.current;
+  // Position the track (and size the viewport) for the current index plus an
+  // in-flight drag offset. dx = 0 is a settled card.
+  const applyLayout = (dx, animated) => {
+    const v = viewport.current, t = track.current;
+    if (!v || !t) return;
+    const w = v.clientWidth || 1;
+    const px = -indexRef.current * w + dx;
+    t.style.transition = animated ? `transform .32s ${SWIPE_EASE}` : 'none';
+    t.style.transform = `translate3d(${px}px, 0, 0)`;
+
     const hs = heights.current;
-    if (!el || !el.clientWidth || !hs.length) return;
-    const pos = el.scrollLeft / el.clientWidth;
-    const i = Math.max(0, Math.min(hs.length - 1, Math.floor(pos)));
+    if (!hs.length) return;
+    const pos = Math.max(0, Math.min(hs.length - 1, -px / w));
+    const i = Math.floor(pos);
     const j = Math.min(hs.length - 1, i + 1);
-    const f = Math.max(0, Math.min(1, pos - i));
+    const f = pos - i;
     const h = Math.ceil((hs[i] || 0) * (1 - f) + (hs[j] || 0) * f);
-    if (!h || h === lastH.current) return;   // no-op guard: keeps a running toggle animation alive
-    lastH.current = h;
-    el.style.transition = animated ? 'height .25s ease' : 'none';
-    el.style.height = `${h}px`;
+    if (!h) return;
+    v.style.transition = animated ? `height .32s ${SWIPE_EASE}` : 'none';
+    v.style.height = `${h}px`;
   };
 
   const measure = () => {
     heights.current = slides.current.map((el) => (el ? Math.ceil(el.getBoundingClientRect().height) : 0));
-    applyHeight(animNext.current);
+    applyLayout(drag.current.tracking ? drag.current.dx : 0, animNext.current);
     animNext.current = false;
   };
 
   // Keep measuring: card heights change when a recipe opens, when a meal image
-  // finishes loading, and on any viewport resize (text rewraps).
-  useEffect(() => {
-    lastH.current = null;
+  // finishes loading, and on any viewport resize (text rewraps, width changes).
+  useLayoutEffect(() => {
     measure();
     const onResize = () => measure();
     window.addEventListener('resize', onResize);
+    window.addEventListener('orientationchange', onResize);
     let ro = null;
     if (typeof ResizeObserver !== 'undefined') {
       ro = new ResizeObserver(() => measure());
       slides.current.forEach((el) => el && ro.observe(el));
     }
-    return () => { window.removeEventListener('resize', onResize); if (ro) ro.disconnect(); };
+    return () => {
+      window.removeEventListener('resize', onResize);
+      window.removeEventListener('orientationchange', onResize);
+      if (ro) ro.disconnect();
+    };
   }, [ids]);
 
-  // Fallback for browsers without ResizeObserver (and the path that carries the
-  // animation flag): re-measure right after the toggle has rendered.
-  useEffect(() => { measure(); }, [recipeOpen]);
+  // Settle onto the current card whenever the index changes (swipe, dot, arrow).
+  useLayoutEffect(() => { applyLayout(0, true); }, [index]);
+
+  // A new set of meals in this slot: go back to the first option.
+  useEffect(() => { setIndex(0); }, [ids]);
+
+  // Re-measure after the recipe toggle has rendered (also the path that carries the
+  // animation flag for browsers without ResizeObserver).
+  useLayoutEffect(() => { measure(); }, [recipeOpen]);
 
   const toggleRecipe = () => { animNext.current = true; setRecipeOpen((v) => !v); };
 
-  const onScroll = () => {
-    const el = ref.current;
-    if (!el || !el.clientWidth) return;
-    const i = Math.round(el.scrollLeft / el.clientWidth);
-    setActive((prev) => (prev === i ? prev : i));
-    applyHeight(false);
+  const go = (i) => setIndex(Math.max(0, Math.min(n - 1, i)));
+
+  // --- gesture ---------------------------------------------------------------
+  // touchAction 'pan-y' leaves vertical page scrolling to the browser and hands us
+  // horizontal movement, so the two never fight. We still watch the first few px to
+  // decide the axis ourselves: a mostly-vertical move releases the gesture entirely
+  // so a diagonal scroll doesn't drag the card sideways.
+  const onPointerDown = (e) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    if (n < 2) return;
+    const v = viewport.current;
+    drag.current = { tracking: true, axis: null, x0: e.clientX, y0: e.clientY, dx: 0, w: (v && v.clientWidth) || 1, t0: Date.now() };
   };
-  const go = (i) => { const el = ref.current; if (!el) return; el.scrollTo({ left: i * el.clientWidth, behavior: 'smooth' }); };
+
+  const onPointerMove = (e) => {
+    const d = drag.current;
+    if (!d.tracking) return;
+    const dx = e.clientX - d.x0, dy = e.clientY - d.y0;
+    if (!d.axis) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      if (Math.abs(dy) > Math.abs(dx)) { d.tracking = false; return; }   // vertical: let the page scroll
+      d.axis = 'x';
+      d.t0 = Date.now();                                                 // time the horizontal part only
+      try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) { /* capture is best-effort */ }
+    }
+    // Rubber-band at the two ends so the first and last card resist instead of
+    // sliding off into empty space.
+    const i = indexRef.current;
+    const m = ((i === 0 && dx > 0) || (i === n - 1 && dx < 0)) ? dx * 0.35 : dx;
+    d.dx = m;
+    applyLayout(m, false);
+  };
+
+  const onPointerUp = () => {
+    const d = drag.current;
+    if (!d.tracking) return;
+    const moved = d.axis === 'x';
+    d.tracking = false;
+    if (!moved) { d.dx = 0; return; }
+    const dt = Math.max(1, Date.now() - d.t0);
+    const velocity = Math.abs(d.dx) / dt;
+    const threshold = Math.min(SWIPE_MIN_PX, d.w * SWIPE_MIN_RATIO);
+    const commit = Math.abs(d.dx) > threshold || velocity > SWIPE_FLICK_V;
+    const step = commit ? (d.dx < 0 ? 1 : -1) : 0;                      // never more than one card
+    const next = Math.max(0, Math.min(n - 1, indexRef.current + step));
+    dragged.current = true;
+    setTimeout(() => { dragged.current = false; }, 0);
+    d.dx = 0;
+    if (next !== indexRef.current) setIndex(next);                      // the effect settles the track
+    else applyLayout(0, true);
+  };
+
+  // Swallow the click that ends a drag, so releasing over "See recipe" doesn't toggle it.
+  const onClickCapture = (e) => {
+    if (!dragged.current) return;
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
   if (!options || !options.length) return null;
   return (
     <div>
-      <style>{'.mf-carousel::-webkit-scrollbar{display:none}'}</style>
-      <div ref={ref} onScroll={onScroll} className="mf-carousel"
-        style={{ display: 'flex', alignItems: 'flex-start', overflowX: 'auto', overflowY: 'hidden', scrollSnapType: 'x mandatory', scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}>
-        {options.map((o, i) => (
-          <div key={i} ref={(el) => { slides.current[i] = el; }}
-            style={{ flex: '0 0 100%', minWidth: 0, boxSizing: 'border-box', scrollSnapAlign: 'start', padding: '2px' }}>
-            <MealCard o={o} open={recipeOpen} onToggle={toggleRecipe} />
-          </div>
-        ))}
+      <div ref={viewport}
+        style={{ overflow: 'hidden', touchAction: 'pan-y', WebkitTapHighlightColor: 'transparent' }}>
+        <div ref={track}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+          onClickCapture={onClickCapture}
+          onDragStart={(e) => e.preventDefault()}
+          style={{ display: 'flex', alignItems: 'flex-start', willChange: 'transform' }}>
+          {options.map((o, i) => (
+            <div key={i} ref={(el) => { slides.current[i] = el; }}
+              style={{ flex: '0 0 100%', minWidth: 0, boxSizing: 'border-box', padding: '2px' }}>
+              <MealCard o={o} open={recipeOpen} onToggle={toggleRecipe} />
+            </div>
+          ))}
+        </div>
       </div>
       {options.length > 1 && (
         options.length > 10
           ? <div className="flex items-center justify-center gap-3 mt-2">
-              <button onClick={() => go(Math.max(0, active - 1))} disabled={active === 0} aria-label="Previous meal"
+              <button onClick={() => go(index - 1)} disabled={index === 0} aria-label="Previous meal"
                 className="w-7 h-7 flex items-center justify-center rounded-full border border-stone-300 text-stone-500 disabled:opacity-30 hover:bg-stone-100 hover:text-stone-800 transition"><ArrowLeft className="w-3.5 h-3.5" /></button>
-              <span className="text-xs font-medium text-stone-500 tabular-nums select-none">{active + 1} / {options.length}</span>
-              <button onClick={() => go(Math.min(options.length - 1, active + 1))} disabled={active === options.length - 1} aria-label="Next meal"
+              <span className="text-xs font-medium text-stone-500 tabular-nums select-none">{index + 1} / {options.length}</span>
+              <button onClick={() => go(index + 1)} disabled={index === options.length - 1} aria-label="Next meal"
                 className="w-7 h-7 flex items-center justify-center rounded-full border border-stone-300 text-stone-500 disabled:opacity-30 hover:bg-stone-100 hover:text-stone-800 transition"><ArrowRight className="w-3.5 h-3.5" /></button>
             </div>
           : <div className="flex items-center justify-center gap-1.5 mt-2">
               {options.map((_, i) => (
                 <button key={i} onClick={() => go(i)} aria-label={`Option ${i + 1}`}
-                  style={{ width: i === active ? 18 : 6, height: 6, borderRadius: 9999, transition: 'width .2s' }}
-                  className={i === active ? 'bg-stone-800' : 'bg-stone-300'} />
+                  style={{ width: i === index ? 18 : 6, height: 6, borderRadius: 9999, transition: 'width .2s' }}
+                  className={i === index ? 'bg-stone-800' : 'bg-stone-300'} />
               ))}
             </div>
       )}
