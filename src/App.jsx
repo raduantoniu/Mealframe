@@ -3802,10 +3802,19 @@ const TimelinePreview = ({ structure, personalization, meals, snacks, onAdjust, 
 };
 
 
-const MealCard = ({ o }) => {
-  const [open, setOpen] = useState(false);
+// `open` / `onToggle` are OPTIONAL. When the carousel passes them, every card in
+// that slot shares one recipe state, so opening a recipe keeps it open as you swipe
+// through the other options. Rendered on its own (REVIEW_MODE), the card falls back
+// to its own local state and behaves exactly as before.
+// No `h-full`: the card sizes to its own content so the box outline wraps the meal
+// it belongs to instead of stretching to the tallest card in the slot.
+const MealCard = ({ o, open: openProp, onToggle }) => {
+  const [localOpen, setLocalOpen] = useState(false);
+  const controlled = typeof onToggle === 'function';
+  const open = controlled ? !!openProp : localOpen;
+  const toggle = () => (controlled ? onToggle() : setLocalOpen((v) => !v));
   return (
-    <div className="bg-white border border-stone-200 rounded-xl p-4 h-full">
+    <div className="bg-white border border-stone-200 rounded-xl p-4">
       <div className="flex gap-3 items-start">
         <img src={o.img} alt={o.name} loading="lazy"
           onError={(e) => { e.currentTarget.style.display = 'none'; }}
@@ -3833,7 +3842,7 @@ const MealCard = ({ o }) => {
       </div>
       {o.steps && o.steps.length > 0 && (
         <div className="mt-3 pt-3 border-t border-stone-100">
-          <button onClick={() => setOpen(!open)} className="flex items-center gap-1 text-sm font-medium text-orange-600">
+          <button onClick={toggle} className="flex items-center gap-1 text-sm font-medium text-orange-600">
             {open ? 'Hide recipe' : 'See recipe'}
             <ChevronDown className="w-4 h-4" style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }} />
           </button>
@@ -3853,20 +3862,102 @@ const MealCard = ({ o }) => {
   );
 };
 
+// Horizontal meal carousel. Two behaviours worth knowing about:
+//
+// 1. SHARED RECIPE STATE. "See recipe" is owned by the carousel, not the card, so
+//    opening it opens it for every option in that slot. Swiping no longer drops you
+//    back to the collapsed view, and the card you land on has the same shape as the
+//    one you left.
+//
+// 2. PER-MEAL HEIGHT. Slides are top-aligned (no flex stretch) and the scroller's
+//    height is written explicitly, so a two-ingredient meal no longer inherits the
+//    box of the tallest card in the slot — which on mobile could leave more dead
+//    space than a screenful.
+//    The height is INTERPOLATED against scroll position rather than switched at the
+//    snap point: at rest it is exactly the active card's height, and mid-swipe it
+//    eases between the two cards either side of the finger. So the box grows and
+//    shrinks with the drag instead of jumping when the snap lands. The trade-off is
+//    that a taller incoming card is clipped at the bottom while you drag and reveals
+//    itself as the swipe completes — which reads as the card growing, not as a
+//    glitch, and is gone the moment you let go.
+//    Height is written straight to the DOM (not through state) so scrolling never
+//    triggers a React render, and the CSS transition is enabled only for the recipe
+//    toggle, where the change isn't driven by the finger.
 const MealCarousel = ({ options }) => {
   const [active, setActive] = useState(0);
+  const [recipeOpen, setRecipeOpen] = useState(false);
   const ref = useRef(null);
-  const onScroll = () => { const el = ref.current; if (!el) return; setActive(Math.round(el.scrollLeft / el.clientWidth)); };
+  const slides = useRef([]);
+  const heights = useRef([]);
+  const lastH = useRef(null);
+  const animNext = useRef(false);   // true for the one measurement after a recipe toggle
+
+  const n = options ? options.length : 0;
+  slides.current.length = n;
+  const ids = options ? options.map((o) => o.id).join('|') : '';
+
+  // Set the scroller height for the CURRENT scroll position, blending the two
+  // neighbouring cards so the box tracks the drag continuously.
+  const applyHeight = (animated) => {
+    const el = ref.current;
+    const hs = heights.current;
+    if (!el || !el.clientWidth || !hs.length) return;
+    const pos = el.scrollLeft / el.clientWidth;
+    const i = Math.max(0, Math.min(hs.length - 1, Math.floor(pos)));
+    const j = Math.min(hs.length - 1, i + 1);
+    const f = Math.max(0, Math.min(1, pos - i));
+    const h = Math.ceil((hs[i] || 0) * (1 - f) + (hs[j] || 0) * f);
+    if (!h || h === lastH.current) return;   // no-op guard: keeps a running toggle animation alive
+    lastH.current = h;
+    el.style.transition = animated ? 'height .25s ease' : 'none';
+    el.style.height = `${h}px`;
+  };
+
+  const measure = () => {
+    heights.current = slides.current.map((el) => (el ? Math.ceil(el.getBoundingClientRect().height) : 0));
+    applyHeight(animNext.current);
+    animNext.current = false;
+  };
+
+  // Keep measuring: card heights change when a recipe opens, when a meal image
+  // finishes loading, and on any viewport resize (text rewraps).
+  useEffect(() => {
+    lastH.current = null;
+    measure();
+    const onResize = () => measure();
+    window.addEventListener('resize', onResize);
+    let ro = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(() => measure());
+      slides.current.forEach((el) => el && ro.observe(el));
+    }
+    return () => { window.removeEventListener('resize', onResize); if (ro) ro.disconnect(); };
+  }, [ids]);
+
+  // Fallback for browsers without ResizeObserver (and the path that carries the
+  // animation flag): re-measure right after the toggle has rendered.
+  useEffect(() => { measure(); }, [recipeOpen]);
+
+  const toggleRecipe = () => { animNext.current = true; setRecipeOpen((v) => !v); };
+
+  const onScroll = () => {
+    const el = ref.current;
+    if (!el || !el.clientWidth) return;
+    const i = Math.round(el.scrollLeft / el.clientWidth);
+    setActive((prev) => (prev === i ? prev : i));
+    applyHeight(false);
+  };
   const go = (i) => { const el = ref.current; if (!el) return; el.scrollTo({ left: i * el.clientWidth, behavior: 'smooth' }); };
   if (!options || !options.length) return null;
   return (
     <div>
       <style>{'.mf-carousel::-webkit-scrollbar{display:none}'}</style>
       <div ref={ref} onScroll={onScroll} className="mf-carousel"
-        style={{ display: 'flex', overflowX: 'auto', scrollSnapType: 'x mandatory', scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}>
+        style={{ display: 'flex', alignItems: 'flex-start', overflowX: 'auto', overflowY: 'hidden', scrollSnapType: 'x mandatory', scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}>
         {options.map((o, i) => (
-          <div key={i} style={{ flex: '0 0 100%', minWidth: 0, boxSizing: 'border-box', scrollSnapAlign: 'start', padding: '2px' }}>
-            <MealCard o={o} />
+          <div key={i} ref={(el) => { slides.current[i] = el; }}
+            style={{ flex: '0 0 100%', minWidth: 0, boxSizing: 'border-box', scrollSnapAlign: 'start', padding: '2px' }}>
+            <MealCard o={o} open={recipeOpen} onToggle={toggleRecipe} />
           </div>
         ))}
       </div>
