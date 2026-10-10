@@ -1870,13 +1870,15 @@ const MEALS = [
     diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:1},
     rules:{ 'Plant-based burger':{stepBase:true,min:100,max:300}, 'Burger buns':{ratioTo:'Plant-based burger',ratio:0.6}, 'Carrots':{max:200}, 'Onion slices':{fix:40}, 'Pickles':{fix:40}, 'Mustard':{fix:15}, 'Ketchup':{max:25} },
     ings:[['Plant-based burger',200,34,26,8.8,1.8,'P'],['Burger buns',120,11.8,4.7,58,2.1,'S'],['Carrots',200,1.8,0.4,13.6,5.6,'S'],['Onion slices',50,0.6,0.1,3.8,0.9,'X'],['Pickles',50,0.2,0.2,0.7,0.5,'X'],['Mustard',50,1.9,1.6,0.9,2,'F'],['Ketchup',50,0.5,0.1,14,0.1,'F']] },
+  // Wraps: the meat/mince is tied to the tortilla count at 20-50g per tortilla (ratio 0.5-1.25 of
+  // tortilla weight; written is ~31g each), so a wrap is never nearly empty or overstuffed.
   { id:'wraps_meat', name:'Wraps', band:[550,1185], mr:false, vg:'wraps',
     diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:1},
-    rules:{ 'Small tortillas':{stepBase:true,min:80,max:240}, 'Hot salsa':{ratioTo:'Small tortillas',ratio:0.375}, 'Bell pepper':{max:150}, 'Romaine':{max:150} },
+    rules:{ 'Ground meat':{ratioTo:'Small tortillas',ratioMin:0.5,ratioMax:1.25}, 'Small tortillas':{stepBase:true,min:80,max:240}, 'Hot salsa':{ratioTo:'Small tortillas',ratio:0.375}, 'Bell pepper':{max:150}, 'Romaine':{max:150} },
     ings:[['Ground meat',100,21,7.1,0,0,'P'],['Lentils (canned)',200,10.8,0.8,28,13,'S'],['Small tortillas',130,12.7,12.7,59.7,12.7,'S'],['Onion',70,0.8,0.1,5.3,1.2,'X'],['Bell pepper',100,1,0.3,3.9,2.1,'X'],['Romaine',100,1.2,0.3,1.2,2.1,'X'],['Hot salsa',150,2.2,0.3,7.1,2.8,'F']] },
-  { id:'wraps_plant', name:'Wraps', band:[550,1185], mr:false, vg:'wraps', plant:true,
+  { id:'wraps_plant', name:'Wraps (plant-based)', band:[550,1185], mr:false, vg:'wraps', plant:true,
     diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:1},
-    rules:{ 'Small tortillas':{stepBase:true,min:80,max:240}, 'Hot salsa':{ratioTo:'Small tortillas',ratio:0.375}, 'Bell pepper':{max:150}, 'Romaine':{max:150} },
+    rules:{ 'Plant-based mince':{ratioTo:'Small tortillas',ratioMin:0.5,ratioMax:1.25}, 'Small tortillas':{stepBase:true,min:80,max:240}, 'Hot salsa':{ratioTo:'Small tortillas',ratio:0.375}, 'Bell pepper':{max:150}, 'Romaine':{max:150} },
     ings:[['Plant-based mince',100,14,8.6,9.4,0,'P'],['Lentils (canned)',200,10.8,0.8,28,13,'S'],['Small tortillas',130,12.7,12.7,59.7,12.7,'S'],['Onion',70,0.8,0.1,5.3,1.2,'X'],['Bell pepper',100,1,0.3,3.9,2.1,'X'],['Romaine',100,1.2,0.3,1.2,2.1,'X'],['Hot salsa',150,2.2,0.3,7.1,2.8,'F']] },
   { id:'burrito_lg', name:'Loaded Burrito Bowl', band:[420,600], mr:false, vg:'burritolg',
     diet:{meat:1,pork:0,fish:0,dairy:1,egg:0,gluten:0},
@@ -1955,9 +1957,11 @@ const MEALS = [
     diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:1},
     rules:{ 'Bolognaise sauce (canned)':{ratioTo:'White pasta (dry)',ratio:2.5,min:100}, 'Olive oil':{ratioTo:'White pasta (dry)',ratio:0.09,min:5,max:20} },
     ings:[['White pasta (dry)',200,26,3,149.3,6.4,'S'],['Bolognaise sauce (canned)',400,19.6,12.4,26,0,'P'],['Olive oil',8,0,8,0,0,'F']] },
-  { id:'pb_banana_toast', name:'Peanut Butter & Banana Toast', band:[680,1510], mr:false, vg:'pb_banana',
+  // PB toast: peanut butter 15-30g per slice (ratio 0.5-1.0 of bread weight) and one banana per
+  // 2-4 slices (ratio 0.83-1.67), so neither can pile up on a couple of slices.
+  { id:'pb_banana_toast', name:'Peanut Butter & Banana Toast', band:[420,1510], mr:false, vg:'pb_banana',
     diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:1},
-    rules:{ 'Bread':{stepBase:true,min:60,max:270}, 'Peanut butter':{ratioTo:'Bread',ratioMin:0.5} },
+    rules:{ 'Bread':{stepBase:true,min:60,max:270}, 'Peanut butter':{ratioTo:'Bread',ratioMin:0.5,ratioMax:1.0}, 'Medium banana':{ratioTo:'Bread',ratioMin:0.83,ratioMax:1.67} },
     ings:[['Bread',180,16,6,85,4.9,'S'],['Peanut butter',75,17,38,13,3.7,'P'],['Medium banana',240,2.6,0.8,48,6.2,'S']] },
   { id:'buttered_rice_eggs', name:'Buttered Rice with Fried Eggs', band:[650,1450], mr:false, vg:null,
     diet:{meat:0,pork:0,fish:0,dairy:1,egg:1,gluten:0},
@@ -1966,9 +1970,11 @@ const MEALS = [
     diet:{meat:0,pork:0,fish:0,dairy:1,egg:0,gluten:1},
     rules:{ 'Small tortillas':{stepBase:true,min:120,max:240,prefer:'more'}, 'Cheddar cheese':{ratioTo:'Small tortillas',ratio:0.75,min:60} },
     ings:[['Small tortillas',195,19,19,70,19,'S'],['Cheddar cheese',100,23,33,3.4,0,'P'],['Red kidney beans (canned)',150,7.8,0.6,17,0,'S']] },
+  // PB quesadillas: per tortilla, peanut butter 25-40g, granola up to 12g (ratio 0.3), and one
+  // banana per 2-5 tortillas (ratio 0.6-1.5), so the granola can't become the bulk of the plate.
   { id:'pb_quesadillas', name:'Peanut Butter Quesadillas', band:[785,1330], mr:false, vg:'pb_banana', plant:true,
     diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:1},
-    rules:{ 'Small tortillas':{stepBase:true,min:80,max:240}, 'Peanut butter':{ratioTo:'Small tortillas',ratioMin:0.625,ratioMax:1.0} },
+    rules:{ 'Small tortillas':{stepBase:true,min:80,max:240}, 'Peanut butter':{ratioTo:'Small tortillas',ratioMin:0.625,ratioMax:1.0}, 'Granola':{ratioTo:'Small tortillas',ratioMax:0.3}, 'Large banana':{ratioTo:'Small tortillas',ratioMin:0.6,ratioMax:1.5} },
     ings:[['Small tortillas',130,12.7,12.7,47,12.7,'S'],['Peanut butter',60,13,31,10,3,'P'],['Large banana',120,1.5,0.5,28,3.6,'S'],['Granola',20,2,2,13,0,'F']] },
   { id:'chicken_buttered_rice', name:'Chicken Buttered Rice', band:[650,1550], mr:false, vg:null,
     diet:{meat:1,pork:0,fish:0,dairy:1,egg:0,gluten:0},
@@ -2160,7 +2166,13 @@ function solveMeal(meal, K, P, T=TUNE, _bg){
   // while the binder stays in proportion. Iterate: solve, read the base's grams, recompute
   // the binder, resolve, until the binder estimate stops moving (converges in 1-3 passes).
   const _R = meal.rules||null;
-  if(_bg===undefined && _R && meal.ings.some(ig=>_R[ig[0]]&&_R[ig[0]].ratioTo!=null)){
+  // A meal with a STEP BASE is handed to the step-base branch below first: it fixes each
+  // whole-unit count in turn and re-enters here per count, so the binder then follows a
+  // known base. (Entering here first would pass _bg down and skip the unit search entirely.)
+  // The unit search tries every allowed count, so a step-base dish needs its free ingredients
+  // tied to the base (ratioMin/ratioMax) or capped, or a small base gets an oversized partner.
+  const _hasSB = !!_R && meal.ings.some(ig=>_R[ig[0]]&&_R[ig[0]].stepBase&&UNIT[ig[0]]);
+  if(_bg===undefined && _R && !_hasSB && meal.ings.some(ig=>_R[ig[0]]&&_R[ig[0]].ratioTo!=null)){
     const hasList = meal.ings.some(ig=>_R[ig[0]]&&Array.isArray(_R[ig[0]].ratioTo));
     let bgMap={},res,best=null,seen={};
     for(let it=0; it<6; it++){
@@ -2977,8 +2989,8 @@ function selectCustomCarousel(K, P, restriction, sortDir = 1) {
 // Same tune as the custom meal builder (symmetric ±5g protein window).
 const MENU_TUNE = { ...TUNE, PHI: 0 };
 const MENU_XL_TUNE = { ...MENU_TUNE, DENS_DIV: 2600, srMin: 0.25, srMax: 3.8, PDLO: 0.6, PDHI: 1.6 };
-const MENU_K = { lo: 200, hi: 2400, step: 50 };
-const MENU_P = { lo: 10, hi: 200, step: 5 };
+const MENU_K = { lo: 200, hi: 2000, step: 50 };
+const MENU_P = { lo: 5, hi: 200, round: 5 };
 const MENU_DISHES = MEALS.filter(m => !m.xl).map(m => ({ m, xl: MEALS.find(x => x.xl && x.base === m.id) || null }));
 
 function solveDish(dish, K, P) {
@@ -2994,13 +3006,45 @@ function solveDish(dish, K, P) {
 // level rather than as one flat range. Returns null if the dish solves nowhere on the grid.
 // density is the dish's typical calorie density: the average over every plate it solves to
 // (it shifts a little with size and protein, as the proportions do).
+// Protein is searched gram by gram: some dishes (peanut butter quesadillas, say) only solve
+// in a window a gram or two wide at each size, which a coarser search steps straight over.
+// The search is bounded by the solver's own protein-density gate, so no solvable target is
+// skipped. The protein choices offered are the round ones (multiples of MENU_P.round) where
+// the dish has any at that size, otherwise the middle of its narrow window.
+// Calories get the same care: a whole-unit dish can solve at 925 but not at 900 or 950, so
+// when the round level itself has no plate, the nearest target within half a step is used.
+// A level therefore carries K (the round size shown) and kT (the target actually solved).
 function dishAvailability(dish) {
   const levels = [];
   let pMin = Infinity, pMax = -Infinity, dSum = 0, dN = 0;
+  const base = groupSums(dish.m.ings), nat = base.p / base.k;                 // g protein per kcal, as written
+  const pdLo = Math.min(MENU_TUNE.PDLO, MENU_XL_TUNE.PDLO), pdHi = Math.max(MENU_TUNE.PDHI, MENU_XL_TUNE.PDHI);
+  // Cheap pre-check: the solver's band gate rejects any target outside the written range of
+  // the plate, its XL, or its double serving, so those targets are not worth scanning.
+  const g = MENU_TUNE.BAND_GRACE;
+  const within = (band, k) => !band || (k >= band[0] * (1 - g) && k <= band[1] * (1 + g));
+  const reachable = (kT) => within(dish.m.band, kT) || within(dish.m.band, kT / 2) || (dish.xl ? within(dish.xl.band, kT) : false);
+  // step = MENU_P.round tries only the round protein values (fast, and enough for most
+  // sizes); step = 1 is the gram-by-gram search, used when the round values find nothing.
+  const scan = (kT, step) => {
+    const all = [], dens = [];
+    if (!reachable(kT)) return { all, dens };
+    const lo = Math.max(MENU_P.lo, Math.floor(kT * nat * pdLo) - 1), to = Math.min(MENU_P.hi, Math.ceil(kT * nat * pdHi) + 1);
+    for (let P = Math.ceil(lo / step) * step; P <= to; P += step) { const o = solveDish(dish, kT, P); if (o) { all.push(P); dens.push(o.solved.density); } }
+    return { all, dens };
+  };
+  const NEAR = [0, 5, -5, 10, -10, 15, -15, 20, -20, 25];                     // nearest first; +25 belongs to this level, -25 to the one below
   for (let K = MENU_K.lo; K <= MENU_K.hi; K += MENU_K.step) {
-    const ps = [];
-    for (let P = MENU_P.lo; P <= MENU_P.hi; P += MENU_P.step) { const o = solveDish(dish, K, P); if (o) { ps.push(P); dSum += o.solved.density; dN++; } }
-    if (ps.length) { levels.push({ K, ps }); pMin = Math.min(pMin, ps[0]); pMax = Math.max(pMax, ps[ps.length - 1]); }
+    let kT = K, found = null;
+    const quick = scan(K, MENU_P.round);
+    if (quick.all.length) found = quick;
+    else for (const off of NEAR) { const r = scan(K + off, 1); if (r.all.length) { kT = K + off; found = r; break; } }
+    if (!found) continue;
+    const { all, dens } = found;
+    dens.forEach((d) => { dSum += d; dN++; });
+    const round = all.filter((P) => P % MENU_P.round === 0);
+    levels.push({ K, kT, ps: round.length ? round : [all[Math.floor((all.length - 1) / 2)]] });
+    pMin = Math.min(pMin, all[0]); pMax = Math.max(pMax, all[all.length - 1]);
   }
   if (!levels.length) return null;
   // Calorie range as text. Many dishes have a gap between the largest single plate and the
@@ -4648,17 +4692,30 @@ const MenuScreen = ({ onBack }) => {
   };
 
   const pick = menu && pickId ? menu.find((d) => d.id === pickId) : null;
-  const open = (d) => { setPickId(d.id); setK(null); setP(null); window.scrollTo(0, 0); };
+  const midP = (lvl) => lvl.ps[Math.floor((lvl.ps.length - 1) / 2)];
+  // A dish opens on a normal single serving: the middle of its first unbroken run of calorie
+  // levels (anything past the first gap is the double serving).
+  const open = (d) => {
+    let end = 0;
+    while (end + 1 < d.levels.length && d.levels[end + 1].K - d.levels[end].K === MENU_K.step) end++;
+    const lvl = d.levels[Math.floor(end / 2)];
+    setPickId(d.id); setK(lvl.K); setP(midP(lvl)); window.scrollTo(0, 0);
+  };
   const close = () => { setPickId(null); setK(null); setP(null); window.scrollTo(0, 0); };
   // Choosing a calorie level keeps the protein already chosen when that size still offers
   // it; otherwise it lands on the middle of what that size can do.
-  const chooseK = (lvl) => { setK(lvl.K); setP(lvl.ps.includes(P) ? P : lvl.ps[Math.floor((lvl.ps.length - 1) / 2)]); };
+  const chooseK = (lvl) => { setK(lvl.K); setP(lvl.ps.includes(P) ? P : midP(lvl)); };
 
   const chip = (on) => `px-3 py-1.5 rounded-lg border text-sm tabular-nums transition-colors ${on ? 'border-orange-500 bg-orange-50 text-stone-900 font-medium' : 'border-stone-200 bg-stone-50 text-stone-700 hover:border-orange-300'}`;
 
   if (pick) {
-    const level = pick.levels.find((l) => l.K === K) || null;
-    const option = level && P != null ? dishOption(MENU_DISHES.find((d) => d.m.id === pick.id), K, P) : null;
+    // The calorie slider moves over the dish's AVAILABLE levels (by position, not by kcal), so
+    // it can only ever land on a size the dish solves at and steps straight over any gap.
+    const li = Math.max(0, pick.levels.findIndex((l) => l.K === K));
+    const level = pick.levels[li] || null;
+    const last = pick.levels.length - 1;
+    const stepBtn = (off) => `w-9 h-9 flex-shrink-0 rounded-full border text-lg leading-none flex items-center justify-center transition-colors ${off ? 'border-stone-200 text-stone-300 cursor-not-allowed' : 'border-stone-300 text-stone-700 hover:border-orange-400 hover:text-stone-900'}`;
+    const option = level && P != null ? dishOption(MENU_DISHES.find((d) => d.m.id === pick.id), level.kT, P) : null;
     return (
       <Card className="max-w-2xl">
         <BackButton onClick={close} />
@@ -4672,15 +4729,23 @@ const MenuScreen = ({ onBack }) => {
         </div>
 
         <div className="mt-5">
-          <label className="text-sm font-medium text-stone-700">Calories</label>
-          <div className="mt-1 flex flex-wrap gap-2">
-            {pick.levels.map((l) => (
-              <button key={l.K} type="button" onClick={() => chooseK(l)} className={chip(l.K === K)}>{l.K}</button>
-            ))}
+          <div className="flex items-baseline justify-between">
+            <label htmlFor="menu-kcal" className="text-sm font-medium text-stone-700">Calories</label>
+            <span className="text-lg font-semibold text-stone-900 tabular-nums">{level.K} <span className="text-sm font-normal text-stone-500">kcal</span></span>
+          </div>
+          <div className="mt-2 flex items-center gap-3">
+            <button type="button" aria-label="Fewer calories" disabled={li === 0} onClick={() => chooseK(pick.levels[li - 1])} className={stepBtn(li === 0)}>−</button>
+            <input id="menu-kcal" type="range" min={0} max={last} step={1} value={li} disabled={last === 0}
+              onChange={(e) => chooseK(pick.levels[Number(e.target.value)])}
+              aria-valuetext={level.K + ' kcal'} className="flex-1 min-w-0 accent-orange-500" />
+            <button type="button" aria-label="More calories" disabled={li === last} onClick={() => chooseK(pick.levels[li + 1])} className={stepBtn(li === last)}>+</button>
+          </div>
+          <div className="mt-1 px-12 flex justify-between text-xs text-stone-500 tabular-nums">
+            <span>{pick.levels[0].K}</span><span>{pick.levels[last].K}</span>
           </div>
         </div>
 
-        {level ? (
+        {level && (
           <div className="mt-4">
             <label className="text-sm font-medium text-stone-700">Protein (g)</label>
             <div className="mt-1 flex flex-wrap gap-2">
@@ -4690,8 +4755,6 @@ const MenuScreen = ({ onBack }) => {
             </div>
             <p className="text-xs text-stone-500 mt-1.5">The protein this meal can reach depends on its size, so the choices change with the calories.</p>
           </div>
-        ) : (
-          <p className="text-sm text-stone-500 mt-4">Pick a calorie level to see the protein options and the exact ingredient weights.</p>
         )}
 
         {option && (
