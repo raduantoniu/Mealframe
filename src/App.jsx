@@ -2022,30 +2022,30 @@ const MEALS = [
   // Scaled-up "double portion" versions for extreme slots (2-meal-a-day and big bulks).
   // xl:true routes them through xlTune (volume floor relaxed). High bands + high protein
   // floors keep them out of every normal slot. base:<id> reuses the base image + recipe.
-  { id:'chicken_rice_xl', base:'chicken_rice', name:'Chicken & Veggie Rice (XL)', band:[850,1500], mr:false, vg:null, xl:true,
+  { id:'chicken_rice_xl', base:'chicken_rice', name:'Chicken & Veggie Rice', band:[850,1500], mr:false, vg:null, xl:true,
     diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:0},
     rules:{ 'Chicken breast':{min:290}, 'White rice (dry)':{min:50}, 'Frozen veg mix':{min:120,max:280}, 'Oil':{max:14}, 'Soy sauce':{min:10,max:20} },
     ings:[['Chicken breast',400,80,12.1,0,0,'P'],['White rice (dry)',130,9.3,1,102,1.6,'S'],['Frozen veg mix',250,7.8,1.2,32,10.7,'X'],['Oil',12,0,12,0,0,'F'],['Soy sauce',20,1.6,0.1,0.8,0,'F']] },
-  { id:'salmon_potato_xl', base:'salmon_potato', name:'Salmon & Baked Potatoes (XL)', band:[950,1550], mr:false, vg:null, xl:true,
+  { id:'salmon_potato_xl', base:'salmon_potato', name:'Salmon & Baked Potatoes', band:[950,1550], mr:false, vg:null, xl:true,
     diet:{meat:0,pork:0,fish:1,dairy:0,egg:0,gluten:0},
     cookFloor:{ of:'Potatoes (raw)', to:'Salmon', ratio:1.2 },
     rules:{ 'Salmon':{min:270}, 'Oil':{max:15} },
     ings:[['Salmon',350,73.5,15.4,0,0,'P'],['Potatoes (raw)',500,17.5,1,151,18,'S'],['Oil',12,0,12,0,0,'F']] },
-  { id:'spaghetti_bolognaise_xl', base:'spaghetti_bolognaise', name:'Spaghetti Bolognaise (XL)', band:[1320,1850], mr:false, vg:null, xl:true,
+  { id:'spaghetti_bolognaise_xl', base:'spaghetti_bolognaise', name:'Spaghetti Bolognaise', band:[1320,1850], mr:false, vg:null, xl:true,
     diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:1},
     rules:{ 'Bolognaise sauce (canned)':{ratioTo:'White pasta (dry)',ratio:2.5,min:100}, 'Olive oil':{ratioTo:'White pasta (dry)',ratio:0.09,min:5,max:30} },
     ings:[['White pasta (dry)',320,41.6,4.8,239,10.2,'S'],['Bolognaise sauce (canned)',800,39.2,24.8,52,0,'P'],['Olive oil',22,0,22,0,0,'F']] },
-  { id:'buttered_rice_eggs_xl', base:'buttered_rice_eggs', name:'Buttered Rice with Fried Eggs (XL)', band:[1080,1650], mr:false, vg:null, xl:true,
+  { id:'buttered_rice_eggs_xl', base:'buttered_rice_eggs', name:'Buttered Rice with Fried Eggs', band:[1080,1650], mr:false, vg:null, xl:true,
     diet:{meat:0,pork:0,fish:0,dairy:1,egg:1,gluten:0},
     rules:{ 'Eggs':{min:200,max:350}, 'Butter':{min:15,max:60} },
     ings:[['White rice',280,20,2.1,220,3.5,'S'],['Eggs',300,36,30,0,0,'P'],['Butter',45,0.45,36,0,0,'F']] },
   // wave 2: chunky meals made to scale via a continuous filler (fries) + a mayo lever,
   // exactly as intended — the fries bridge the whole-patty steps so there are no gaps.
-  { id:'burgers_fries_meat_xl', base:'burgers_fries_meat', name:'Burgers & Fries (XL)', band:[1150,1900], mr:false, vg:null, xl:true,
+  { id:'burgers_fries_meat_xl', base:'burgers_fries_meat', name:'Burgers & Fries', band:[1150,1900], mr:false, vg:null, xl:true,
     diet:{meat:1,pork:0,fish:0,dairy:0,egg:0,gluten:1},
     rules:{ 'Burger patties':{stepBase:true,min:300,max:500}, 'Burger buns':{ratioTo:'Burger patties',ratio:0.6}, 'Mayo':{max:50}, 'Onion slices':{fix:50}, 'Pickles':{fix:50}, 'Mustard':{fix:20}, 'Ketchup':{max:40} },
     ings:[['Burger patties',400,68,60,8.4,0,'P'],['Frozen potato fries (raw)',350,8.4,15.8,85,9.8,'S'],['Burger buns',240,23.6,9.4,116,4.2,'S'],['Mayo',30,0.3,22.5,0.3,0,'F'],['Onion slices',50,0.6,0.1,3.8,0.9,'X'],['Pickles',50,0.2,0.2,0.7,0.5,'X'],['Mustard',50,1.9,1.6,0.9,2,'F'],['Ketchup',50,0.5,0.1,14,0.1,'F']] },
-  { id:'burgers_fries_plant_xl', base:'burgers_fries_plant', name:'Plant Burgers & Fries (XL)', band:[1150,1900], mr:false, vg:null, plant:true, xl:true,
+  { id:'burgers_fries_plant_xl', base:'burgers_fries_plant', name:'Plant Burgers & Fries', band:[1150,1900], mr:false, vg:null, plant:true, xl:true,
     diet:{meat:0,pork:0,fish:0,dairy:0,egg:0,gluten:1},
     rules:{ 'Plant-based burger':{stepBase:true,min:300,max:500}, 'Burger buns':{ratioTo:'Plant-based burger',ratio:0.6}, 'Mayo':{max:50}, 'Onion slices':{fix:50}, 'Pickles':{fix:50}, 'Mustard':{fix:20}, 'Ketchup':{max:40} },
     ings:[['Plant-based burger',400,68,52,17.6,3.6,'P'],['Frozen potato fries (raw)',350,8.4,15.8,85,9.8,'S'],['Burger buns',240,23.6,9.4,116,4.2,'S'],['Mayo',30,0.3,22.5,0.3,0,'F'],['Onion slices',50,0.6,0.1,3.8,0.9,'X'],['Pickles',50,0.2,0.2,0.7,0.5,'X'],['Mustard',50,1.9,1.6,0.9,2,'F'],['Ketchup',50,0.5,0.1,14,0.1,'F']] },
@@ -2142,9 +2142,13 @@ function snapUnit(name, g){
 // beyond PTOL (default 0 = symmetric, so the cut is unchanged). Overshoot is nearly
 // free on a bulk — extra protein displaces carbs at equal kcal, so total calories
 // still land, and more protein while gaining is fine. Undershoot stays capped at PTOL.
-const TUNE = { spMin:0.35, spMax:2.6, srMin:0.3, srMax:3.2, VD:0.55, vMin:0.6, vMax:1.9, PTOL:5, PHI:5, PROP:2.6, DENS_DIV:900, PDLO:0.72, PDHI:1.4, BAND_GRACE:0.03, MAXDRIFT:0.12 };
+// KTOL / KABS: the finished plate's calories must land within +/-8% of the slot target,
+// or within KABS kcal if that is larger — so small slots, where 8% is only a few grams of
+// food and whole units can't land that finely, keep a workable window.
+const TUNE = { spMin:0.35, spMax:2.6, srMin:0.3, srMax:3.2, VD:0.55, vMin:0.6, vMax:1.9, PTOL:5, PHI:5, PROP:2.6, DENS_DIV:900, PDLO:0.72, PDHI:1.4, BAND_GRACE:0.03, MAXDRIFT:0.12, KTOL:0.08, KABS:60 };
 
 // Directional protein-fit test: achieved protein within [-PTOL, +(PTOL+PHI)] of target.
+function kcalFits(achK, K, T){ return Math.abs(achK - K) <= Math.max(K*T.KTOL, T.KABS); }
 function proteinFits(achP, P, T){ const d = Math.round(achP) - P; return d >= -T.PTOL && d <= T.PTOL + T.PHI; }
 
 function groupSums(ings){ let k=0,p=0; ings.forEach(ig=>{k+=ingKcal(ig); p+=ingP(ig);}); return {k,p}; }
@@ -2168,7 +2172,9 @@ function solveMeal(meal, K, P, T=TUNE, _bg){
       const key=JSON.stringify(next); bgMap=next;
       if(!changed || (hasList&&seen[key])) break; seen[key]=1;
     }
-    return hasList ? (best||res) : res;
+    // calorie tolerance is judged on the converged plate, not on the intermediate passes
+    const out = hasList ? (best||res) : res;
+    return (out.feasible && !kcalFits(out.kcal, K, T)) ? {feasible:false} : out;
   }
   // STEP BASE: a discrete ingredient (eggs, toast, patties) that grows in WHOLE UNITS while a
   // continuous ingredient (cottage cheese, etc.) fills in behind it. A single shared scale
@@ -2431,10 +2437,54 @@ function solveMeal(meal, K, P, T=TUNE, _bg){
   // meal to the slots it genuinely fits. Rejection-only; no effect on meals without rules.
   if(ruleApplied && !proteinFits(aP, P, T)) return {feasible:false};
 
+  // CALORIE TOLERANCE: caps, fixes and whole-unit snapping can leave a plate that hits
+  // protein but sits well off the slot's calories (a capped lever can't absorb the rest).
+  // Keep the meal only where the finished plate lands within KTOL (or KABS) of the slot
+  // target. Rejection-only; a double serving is re-checked on the doubled plate. Skipped on
+  // ratio-binder passes (_bg set): the binder wrapper above applies it once converged.
+  if(_bg===undefined && !kcalFits(aK, K, T)) return {feasible:false};
+
   return { feasible:true, mode, portions,
     kcal:Math.round(aK), protein:Math.round(aP), fat:Math.round(aF), carbs:Math.round(aC), fiber:Math.round(aFib),
     density: Math.round(cookedDensity*100)/100, grams:Math.round(grams),
     scaleP:Math.round(scaleP*100)/100, scaleS:Math.round(scaleL*100)/100, scaleX:Math.round(scaleX*100)/100 };
+}
+
+// DOUBLE SERVING: a slot too big for a meal's written range is served as TWO normal
+// servings instead of one stretched plate. The solver runs untouched at half the slot
+// (K/2, P/2) — every band, cap, ratio, drift guard and volume floor applies per serving
+// exactly as it does for a normal slot — and the solved portions are then doubled. So the
+// proportions are those of an already-approved plate, and a cap like Oil max:10 reads as
+// "10g per serving". Whole units stay whole (3 eggs -> 6 eggs). Protein is re-checked on
+// the doubled plate, as are calories, since doubling also doubles the per-serving miss. Meal replacements
+// and XL meals are never doubled. Additive: callers only try this where the meal does not
+// solve at the slot directly (see solveSlot), so existing plates are unaffected.
+function solveDouble(meal, K, P, T=TUNE){
+  if(meal.xl || meal.mr) return {feasible:false};
+  const r = solveMeal(meal, K/2, P/2, T);
+  if(!r.feasible) return r;
+  if(!proteinFits(r.protein*2, P, T) || !kcalFits(r.kcal*2, K, T)) return {feasible:false};
+  const portions = r.portions.map(p=>{
+    const grams=p.grams*2, sn=p.label?snapUnit(p.name, grams):null;
+    const d={ name:p.name, grams, kcal:p.kcal*2, protein:p.protein*2, carbs:p.carbs*2, fat:p.fat*2, fiber:p.fiber*2 };
+    return (sn && sn.grams===grams) ? {...d, label:sn.label} : d;
+  });
+  return { ...r, portions, servings:2, kcal:r.kcal*2, protein:r.protein*2, fat:r.fat*2, carbs:r.carbs*2, fiber:r.fiber*2, grams:r.grams*2 };
+}
+
+// One meal for one slot: the normal single plate where it solves, else a double serving.
+function solveSlot(meal, K, P, T, xlT){
+  const s = solveMeal(meal, K, P, meal.xl ? xlT : T);
+  return s.feasible ? s : solveDouble(meal, K, P, T);
+}
+
+// Which solved meals share a slot. An XL never appears alongside its own base meal's normal
+// plate (the normal serving covers it), and a double serving never appears alongside the XL
+// of the same dish (the hand-written XL plate is the better big version where it solves).
+function dedupeSlot(feasible){
+  const direct = new Set(feasible.filter(o => !o.solved.servings).map(o => o.m.id));
+  const xlBases = new Set(feasible.filter(o => o.m.xl).map(o => o.m.base));
+  return feasible.filter(o => !(o.m.xl && direct.has(o.m.base)) && !(o.solved.servings && xlBases.has(o.m.id)));
 }
 
 function eligible(meal, restr){
@@ -2860,7 +2910,7 @@ function selectCarousels(realMeals, structure, answers){
       // no curation, each slot judged independently. Sorted low->high density, then fit.
       const all = MEALS
         .filter(m => eligible(m, restriction))
-        .map(m => ({ m, solved: solveMeal(m, K, P, m.xl ? xlTune : solveTune) }))
+        .map(m => ({ m, solved: solveSlot(m, K, P, solveTune, xlTune) }))
         .filter(o => o.solved.feasible)
         .sort((a,b)=> (a.solved.density-b.solved.density) || fit(a.solved)-fit(b.solved) || (a.m.id<b.m.id?-1:1));
       carousels.push({ K, P, options: all.map(o=>({
@@ -2877,14 +2927,13 @@ function selectCarousels(realMeals, structure, answers){
     // high-first for hardgainer, neutral for balanced bulk), then fit, then id.
     const feasible = MEALS
       .filter(m => eligible(m, restriction) && (!m.mr || allowMR))
-      .map(m => ({ m, solved: solveMeal(m, K, P, m.xl ? xlTune : solveTune) }))
+      .map(m => ({ m, solved: solveSlot(m, K, P, solveTune, xlTune) }))
       .filter(o => o.solved.feasible);
     // An XL never shares a slot with its own base meal: if the base is feasible here,
     // the normal serving covers it, so the XL is dropped. This confines each XL to exactly
     // the extreme range its base can't reach — no caps, no band juggling, normals untouched.
-    const feasIds = new Set(feasible.map(o => o.m.id));
-    const all = feasible
-      .filter(o => !(o.m.xl && feasIds.has(o.m.base)))
+    // Meals that can't reach the slot as one plate come back as a double serving (solveSlot).
+    const all = dedupeSlot(feasible)
       .sort((a,b)=> densDir*(a.solved.density-b.solved.density) || fit(a.solved)-fit(b.solved) || (a.m.id<b.m.id?-1:1));
     carousels.push({ K, P, options: all.map(o=>({
       id:o.m.id, name:o.m.name, img:'/meals/'+(o.m.base||o.m.id)+'.jpg', vegan:isVegan(o.m), recipe:needsRecipe(o.m),
@@ -2908,12 +2957,10 @@ function selectCustomCarousel(K, P, restriction, sortDir = 1) {
 
   const feasible = MEALS
     .filter(m => eligible(m, restr))                 // MRs and XL both allowed here
-    .map(m => ({ m, solved: solveMeal(m, K, P, m.xl ? xlTune : customTune) }))
+    .map(m => ({ m, solved: solveSlot(m, K, P, customTune, xlTune) }))
     .filter(o => o.solved.feasible);
 
-  const feasIds = new Set(feasible.map(o => o.m.id));
-  const all = feasible
-    .filter(o => !(o.m.xl && feasIds.has(o.m.base)))  // XL only where its base can't reach the slot
+  const all = dedupeSlot(feasible)                    // XL only where its base can't reach the slot
     .sort((a, b) => sortDir * (a.solved.density - b.solved.density) || fit(a.solved) - fit(b.solved) || (a.m.id < b.m.id ? -1 : 1));
 
   return all.map(o => ({
@@ -2921,6 +2968,63 @@ function selectCustomCarousel(K, P, restriction, sortDir = 1) {
     kcal: o.solved.kcal, protein: o.solved.protein, carbs: o.solved.carbs, fat: o.solved.fat, fiber: o.solved.fiber,
     density: o.solved.density, portions: o.solved.portions, steps: STEPS[o.m.base || o.m.id] || [],
   }));
+}
+
+// MENU ("browse the menu"): the reverse of the custom carousel. Instead of asking which
+// meals fit a target, ask which targets each DISH can be served at. A dish is one base
+// meal together with its XL version; at any (K, P) it is served exactly as the carousels
+// would serve it — the normal plate where it solves, else the XL, else a double serving.
+// Same tune as the custom meal builder (symmetric ±5g protein window).
+const MENU_TUNE = { ...TUNE, PHI: 0 };
+const MENU_XL_TUNE = { ...MENU_TUNE, DENS_DIV: 2600, srMin: 0.25, srMax: 3.8, PDLO: 0.6, PDHI: 1.6 };
+const MENU_K = { lo: 200, hi: 2400, step: 50 };
+const MENU_P = { lo: 10, hi: 200, step: 5 };
+const MENU_DISHES = MEALS.filter(m => !m.xl).map(m => ({ m, xl: MEALS.find(x => x.xl && x.base === m.id) || null }));
+
+function solveDish(dish, K, P) {
+  const s = solveMeal(dish.m, K, P, MENU_TUNE);
+  if (s.feasible) return { m: dish.m, solved: s };
+  if (dish.xl) { const x = solveMeal(dish.xl, K, P, MENU_XL_TUNE); if (x.feasible) return { m: dish.xl, solved: x }; }
+  const d = solveDouble(dish.m, K, P, MENU_TUNE);
+  return d.feasible ? { m: dish.m, solved: d } : null;
+}
+
+// Every calorie level a dish is available at, and the protein levels available at each.
+// Protein depends on calories (a bigger plate carries more), so it is kept per calorie
+// level rather than as one flat range. Returns null if the dish solves nowhere on the grid.
+// density is the dish's typical calorie density: the average over every plate it solves to
+// (it shifts a little with size and protein, as the proportions do).
+function dishAvailability(dish) {
+  const levels = [];
+  let pMin = Infinity, pMax = -Infinity, dSum = 0, dN = 0;
+  for (let K = MENU_K.lo; K <= MENU_K.hi; K += MENU_K.step) {
+    const ps = [];
+    for (let P = MENU_P.lo; P <= MENU_P.hi; P += MENU_P.step) { const o = solveDish(dish, K, P); if (o) { ps.push(P); dSum += o.solved.density; dN++; } }
+    if (ps.length) { levels.push({ K, ps }); pMin = Math.min(pMin, ps[0]); pMax = Math.max(pMax, ps[ps.length - 1]); }
+  }
+  if (!levels.length) return null;
+  // Calorie range as text. Many dishes have a gap between the largest single plate and the
+  // smallest double serving, so the range is written in pieces: "800–900, 1600–1800".
+  // Small holes (whole-unit meals skip a level here and there) are read as continuous, and a
+  // range that still breaks into many pieces is shown as its overall span; the calorie
+  // buttons on the dish itself always list the exact levels.
+  const segs = [];
+  levels.forEach(({ K }) => { const last = segs[segs.length - 1]; if (last && K - last[1] <= 150) last[1] = K; else segs.push([K, K]); });
+  const span = segs.length > 3 ? [[segs[0][0], segs[segs.length - 1][1]]] : segs;
+  const kText = span.map(([a, b]) => (a === b ? String(a) : a + '–' + b)).join(', ');
+  return { id: dish.m.id, name: dish.m.name, img: '/meals/' + dish.m.id + '.jpg', vegan: isVegan(dish.m), meal: dish.m,
+    levels, kText, kMin: levels[0].K, pMin, pMax, density: Math.round(dSum / dN * 100) / 100 };
+}
+
+// The card for one dish at one target — the same option object the carousels render.
+function dishOption(dish, K, P) {
+  const o = solveDish(dish, K, P);
+  if (!o) return null;
+  return {
+    id: o.m.id, name: o.m.name, img: '/meals/' + (o.m.base || o.m.id) + '.jpg', vegan: isVegan(o.m), recipe: needsRecipe(o.m),
+    kcal: o.solved.kcal, protein: o.solved.protein, carbs: o.solved.carbs, fat: o.solved.fat, fiber: o.solved.fiber,
+    density: o.solved.density, portions: o.solved.portions, steps: STEPS[o.m.base || o.m.id] || [],
+  };
 }
 
 // =====================================================
@@ -2986,7 +3090,7 @@ const QAItem = ({ question, children }) => {
 // SCREENS
 // =====================================================
 
-const LandingScreen = ({ onStart, onDecode, onCustom, onCustomMeal }) => (
+const LandingScreen = ({ onStart, onDecode, onCustom, onCustomMeal, onMenu }) => (
   <Card className="!max-w-4xl">
     <div className="grid md:grid-cols-2 gap-10 items-center">
       <div>
@@ -3014,6 +3118,9 @@ const LandingScreen = ({ onStart, onDecode, onCustom, onCustomMeal }) => (
         </button>
         <button onClick={onCustomMeal} className="mt-2 w-full bg-stone-50 hover:bg-stone-100 text-stone-900 font-medium py-3.5 px-6 rounded-full transition-colors text-sm border border-stone-200">
           Build a single meal
+        </button>
+        <button onClick={onMenu} className="mt-2 w-full bg-stone-50 hover:bg-stone-100 text-stone-900 font-medium py-3.5 px-6 rounded-full transition-colors text-sm border border-stone-200">
+          Browse the menu
         </button>
         <p className="text-xs text-stone-500 text-center mt-3">Takes about 3 minutes.</p>
       </div>
@@ -4500,6 +4607,170 @@ const CustomMealScreen = ({ onBack }) => {
 };
 
 // =====================================================
+// MENU  (standalone "browse the menu" screen)
+// =====================================================
+
+// The availability map is the same for everyone and takes a moment to solve, so it is
+// built once per page load, a few dishes at a time so the screen stays responsive.
+let MENU_CACHE = null;
+
+const MenuScreen = ({ onBack }) => {
+  const [menu, setMenu] = useState(MENU_CACHE);
+  const [diet, setDiet] = useState(['none']);
+  const [sort, setSort] = useState('size');     // 'size' = smallest first, 'low' / 'high' = by calorie density
+  const [pickId, setPickId] = useState(null);
+  const [K, setK] = useState(null);
+  const [P, setP] = useState(null);
+
+  useEffect(() => {
+    if (MENU_CACHE) return;
+    let cancelled = false, i = 0;
+    const out = [];
+    const tick = () => {
+      if (cancelled) return;
+      const until = Math.min(i + 6, MENU_DISHES.length);
+      for (; i < until; i++) { const a = dishAvailability(MENU_DISHES[i]); if (a) out.push(a); }
+      if (i < MENU_DISHES.length) { setTimeout(tick, 0); return; }
+      out.sort((a, b) => a.kMin - b.kMin || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+      MENU_CACHE = out; setMenu(out);
+    };
+    const t = setTimeout(tick, 0);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, []);
+
+  const toggleDiet = (val) => {
+    setDiet((prev) => {
+      if (val === 'none') return ['none'];
+      let next = prev.filter((v) => v !== 'none');
+      next = next.includes(val) ? next.filter((v) => v !== val) : [...next, val];
+      return next.length === 0 ? ['none'] : next;
+    });
+  };
+
+  const pick = menu && pickId ? menu.find((d) => d.id === pickId) : null;
+  const open = (d) => { setPickId(d.id); setK(null); setP(null); window.scrollTo(0, 0); };
+  const close = () => { setPickId(null); setK(null); setP(null); window.scrollTo(0, 0); };
+  // Choosing a calorie level keeps the protein already chosen when that size still offers
+  // it; otherwise it lands on the middle of what that size can do.
+  const chooseK = (lvl) => { setK(lvl.K); setP(lvl.ps.includes(P) ? P : lvl.ps[Math.floor((lvl.ps.length - 1) / 2)]); };
+
+  const chip = (on) => `px-3 py-1.5 rounded-lg border text-sm tabular-nums transition-colors ${on ? 'border-orange-500 bg-orange-50 text-stone-900 font-medium' : 'border-stone-200 bg-stone-50 text-stone-700 hover:border-orange-300'}`;
+
+  if (pick) {
+    const level = pick.levels.find((l) => l.K === K) || null;
+    const option = level && P != null ? dishOption(MENU_DISHES.find((d) => d.m.id === pick.id), K, P) : null;
+    return (
+      <Card className="max-w-2xl">
+        <BackButton onClick={close} />
+        <div className="flex gap-4 items-center">
+          <img src={pick.img} alt={pick.name} onError={(e) => { e.currentTarget.style.display = 'none'; }}
+            style={{ flex: '0 0 auto', width: 88, height: 88, objectFit: 'cover', borderRadius: '10px', background: '#f5f5f4', display: 'block' }} />
+          <div className="min-w-0">
+            <h2 className="text-2xl font-bold text-stone-900 leading-tight">{pick.name}</h2>
+            <p className="text-stone-600 mt-1 text-sm">Available at {pick.kText} kcal.</p>
+          </div>
+        </div>
+
+        <div className="mt-5">
+          <label className="text-sm font-medium text-stone-700">Calories</label>
+          <div className="mt-1 flex flex-wrap gap-2">
+            {pick.levels.map((l) => (
+              <button key={l.K} type="button" onClick={() => chooseK(l)} className={chip(l.K === K)}>{l.K}</button>
+            ))}
+          </div>
+        </div>
+
+        {level ? (
+          <div className="mt-4">
+            <label className="text-sm font-medium text-stone-700">Protein (g)</label>
+            <div className="mt-1 flex flex-wrap gap-2">
+              {level.ps.map((v) => (
+                <button key={v} type="button" onClick={() => setP(v)} className={chip(v === P)}>{v}</button>
+              ))}
+            </div>
+            <p className="text-xs text-stone-500 mt-1.5">The protein this meal can reach depends on its size, so the choices change with the calories.</p>
+          </div>
+        ) : (
+          <p className="text-sm text-stone-500 mt-4">Pick a calorie level to see the protein options and the exact ingredient weights.</p>
+        )}
+
+        {option && (
+          <div className="mt-6">
+            <p className="text-xs text-stone-500 mb-3 leading-relaxed">Quantities are raw weights unless noted. Scale them to the brands you use, since macros vary a little by product.</p>
+            <MealCard o={option} />
+          </div>
+        )}
+      </Card>
+    );
+  }
+
+  // The menu is cached smallest-first; a density sort reorders a copy and keeps that order for ties.
+  const shown = menu ? menu.filter((d) => eligible(d.meal, diet)) : [];
+  if (sort !== 'size') { const dir = sort === 'low' ? 1 : -1; shown.sort((a, b) => dir * (a.density - b.density)); }
+  // Phone: three equal segments across the full width, labels centred and allowed two lines.
+  // From sm up: the same compact pill row the custom meal screen uses, beside the label.
+  const sortPill = (on) => `flex items-center justify-center text-center leading-tight px-2 py-2 rounded-xl text-xs font-medium transition-colors sm:px-4 sm:py-1.5 sm:rounded-full sm:text-sm ${on ? 'bg-stone-900 text-white' : 'text-stone-600 hover:text-stone-900'}`;
+  return (
+    <Card className="!max-w-4xl">
+      <BackButton onClick={onBack} />
+      <span className="text-xs font-semibold text-stone-400 tracking-widest uppercase">Start from the food</span>
+      <h2 className="mt-2 text-2xl font-bold text-stone-900">Browse the menu</h2>
+      <p className="text-stone-600 mt-2 text-sm">Every meal in the library, with the calories and protein it can be made for. Pick one to choose its size and get exact ingredient weights and the recipe.</p>
+
+      <div className="mt-4">
+        <label className="text-sm font-medium text-stone-700">Diet</label>
+        <div className="mt-1 flex flex-wrap gap-2">
+          {CUSTOM_DIET_OPTIONS.map(([val, label]) => {
+            const sel = diet.includes(val);
+            return (
+              <button key={val} type="button" onClick={() => toggleDiet(val)}
+                className={`px-3 py-2 rounded-lg border text-sm transition-colors ${sel ? 'border-orange-500 bg-orange-50 text-stone-900 font-medium' : 'border-stone-200 bg-stone-50 text-stone-700 hover:border-orange-300'}`}>
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="mt-4">
+        <label className="text-sm font-medium text-stone-700">Sort meals by</label>
+        <div className="mt-1 grid grid-cols-3 gap-1 rounded-2xl border border-stone-300 p-1 bg-stone-50 sm:ml-3 sm:inline-flex sm:gap-0 sm:items-center sm:rounded-full">
+          <button type="button" onClick={() => setSort('size')} className={sortPill(sort === 'size')}>Smallest first</button>
+          <button type="button" onClick={() => setSort('low')} className={sortPill(sort === 'low')}>Low calorie density</button>
+          <button type="button" onClick={() => setSort('high')} className={sortPill(sort === 'high')}>High calorie density</button>
+        </div>
+        <p className="text-xs text-stone-500 mt-1.5">Low calorie density means more food for the same calories; high density means smaller, denser meals.</p>
+      </div>
+
+      {!menu ? (
+        <div className="mt-8 mb-4 flex items-center justify-center gap-2 text-sm text-stone-500"><Loader2 className="w-4 h-4 animate-spin" /> Loading the menu</div>
+      ) : shown.length === 0 ? (
+        <div className="mt-6 bg-white border border-stone-200 rounded-xl p-5 text-sm text-stone-600 leading-relaxed">No meals match that diet filter. Try loosening it.</div>
+      ) : (
+        <>
+          <h3 className="mt-6 text-xs font-semibold text-stone-500 uppercase tracking-wider mb-3">{shown.length} meal{shown.length === 1 ? '' : 's'}</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+            {shown.map((d) => (
+              <button key={d.id} type="button" onClick={() => open(d)}
+                className="flex flex-col text-left bg-white border border-stone-200 rounded-xl overflow-hidden hover:border-orange-300 transition-colors">
+                <img src={d.img} alt={d.name} loading="lazy" onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }}
+                  style={{ width: '100%', aspectRatio: '1 / 1', objectFit: 'cover', background: '#f5f5f4', display: 'block' }} />
+                <div className="p-3">
+                  <div className="font-semibold text-stone-900 text-sm leading-snug">{d.name}</div>
+                  <div className="text-xs text-stone-600 mt-1.5 tabular-nums">{d.kText} kcal</div>
+                  <div className="text-xs text-stone-500 mt-0.5 tabular-nums">{d.pMin === d.pMax ? d.pMin : `${d.pMin}–${d.pMax}`} g protein</div>
+                  <div className="text-xs text-stone-400 mt-0.5 tabular-nums">about {d.density} kcal/g</div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </Card>
+  );
+};
+
+// =====================================================
 // MAIN APP
 // =====================================================
 
@@ -4644,9 +4915,12 @@ export default function App() {
         onStart={() => { setCustomMode(false); setScreen('code'); }}
         onDecode={() => setScreen('decode_id')}
         onCustom={() => setScreen('custom')}
-        onCustomMeal={() => setScreen('custom_meal')} />}
+        onCustomMeal={() => setScreen('custom_meal')}
+        onMenu={() => setScreen('menu')} />}
 
       {screen === 'custom_meal' && <CustomMealScreen onBack={() => setScreen('landing')} />}
+
+      {screen === 'menu' && <MenuScreen onBack={() => setScreen('landing')} />}
 
       {screen === 'custom' && (
         <CustomMacrosScreen
